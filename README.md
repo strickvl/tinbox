@@ -65,11 +65,11 @@ tinbox --to es document.pdf
 
 ### 🌐 Language Support
 - Flexible source/target language specification using ISO 639-1 codes
-- Common language aliases (e.g., "en", "zh", "es")
+- Common language aliases (e.g., 'en', 'zh', 'es')
 
-### 📊 Benchmarking
-- Track overall translation time and token usage/cost
-- Compare algorithms or model providers side-by-side
+6. 📊 **Benchmarking**  
+   - Track overall translation time and token usage/cost
+   - Compare algorithms or model providers side-by-side
 
 ## 🚀 Getting Started
 
@@ -125,28 +125,25 @@ pip install tinbox[all]
 ### Command-Line Options
 
 #### Core Options
-| Option | Description | Example |
-|-------|-------------|---------|
-| `--from, -f` | Source language (auto-detect if not specified) | `--from zh` |
-| `--to, -t` | Target language (default: English) | `--to es` |
-| `--model` | Model to use for translation | `--model gpt-4v` |
-| `--output, -o` | Output file (default: print to console) | `--output translated.txt` |
-
+| Option              | Description                                           | Example                    |
+|--------------------|-------------------------------------------------------|----------------------------|
+| `--from, -f`       | Source language (auto-detect if not specified)        | `--from zh`               |
+| `--to, -t`         | Target language (default: English)                    | `--to es`                 |
+| `--model`          | Model to use for translation                          | `--model gpt-4v`          |
+| `--output, -o`     | Output file (default: print to console)              | `--output translated.txt`  |
 
 #### Algorithm Options
-| Option | Description | Default |
-|-------|-------------|---------|
-| `--algorithm, -a` | Translation algorithm (`page` or `sliding-window`) | `page` for PDF |
-| `--window-size` | Size of translation window | 2000 tokens |
-| `--overlap-size` | Overlap between windows | 200 tokens |
-
+| Option              | Description                                           | Default                    |
+|--------------------|-------------------------------------------------------|----------------------------|
+| `--algorithm, -a`  | Translation algorithm (`page` or `sliding-window`)    | `page` for PDF            |
+| `--window-size`    | Size of translation window                            | 2000 tokens               |
+| `--overlap-size`   | Overlap between windows                               | 200 tokens                |
 
 #### Output Format Options
-| Option | Description | Example Output |
-|-------|-------------|---------------|
-| `--format, -F` | Output format (text, json, markdown) | See examples below |
-| `--benchmark, -b` | Include performance metrics | Translation time, costs |
-
+| Option              | Description                                           | Example Output             |
+|--------------------|-------------------------------------------------------|----------------------------|
+| `--format, -F`     | Output format (text, json, markdown)                  | See examples below         |
+| `--benchmark, -b`  | Include performance metrics                           | Translation time, costs    |
 
 ### Supported Languages
 
