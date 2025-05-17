@@ -470,9 +470,6 @@ def create_windows(
     Returns:
         List of text windows
     """
-    print(f"Creating windows for text: {text}")  # Debug print
-    print(f"Window size: {window_size}, Overlap size: {overlap_size}")  # Debug print
-
     if not text:
         return []
 
@@ -492,19 +489,15 @@ def create_windows(
 
         # Extract window
         window = text[start:end]
-        print(f"Created window: {window}")  # Debug print
         windows.append(window)
 
         # If we've reached the end, break
         if end == len(text):
             break
 
-        # Move start position, ensuring we make progress
-        start = end - min(overlap_size, end - start)
-        if start <= 0 or start >= end:
-            break
+        # Move start position for next window
+        start = end - overlap_size
 
-    print(f"Created {len(windows)} windows")  # Debug print
     return windows
 
 
