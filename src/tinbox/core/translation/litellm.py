@@ -57,6 +57,8 @@ class LiteLLMTranslator(ModelInterface):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._logger = logger
+        # Track if we're using GPT-5 models
+        self._is_gpt5 = False
 
     def _get_model_string(self, request: TranslationRequest) -> str:
         """Get the model string for LiteLLM.
@@ -83,6 +85,9 @@ class LiteLLMTranslator(ModelInterface):
         if request.model == ModelType.OLLAMA:
             return f"ollama/{model_name}"
         elif request.model == ModelType.OPENAI:
+            # Check if it's a GPT-5 model
+            if model_name.startswith("gpt-5"):
+                self._is_gpt5 = True
             return model_name  # OpenAI models use their names directly
         elif request.model == ModelType.ANTHROPIC:
             # Anthropic models need anthropic/ prefix according to litellm docs
@@ -172,14 +177,34 @@ class LiteLLMTranslator(ModelInterface):
             TranslationError: If translation fails after retries
         """
         try:
-            return completion(
-                model=self._get_model_string(request),
-                messages=self._create_prompt(request),
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                stream=stream,
-                **{k: v for k, v in request.model_params.items() if k != "model_name"},
-            )
+            # Get the model string first to set _is_gpt5
+            model_string = self._get_model_string(request)
+
+            # Build completion parameters
+            completion_params = {
+                "model": model_string,
+                "messages": self._create_prompt(request),
+                "max_tokens": self.max_tokens,
+                "stream": stream,
+            }
+
+            # GPT-5 models don't support temperature, top_p, or logprobs
+            # They use reasoning effort and verbosity instead
+            if self._is_gpt5:
+                # Don't include temperature for GPT-5
+                # Could add reasoning and text parameters here if needed
+                # Example: completion_params["reasoning"] = {"effort": "medium"}
+                # Example: completion_params["text"] = {"verbosity": "medium"}
+                pass
+            else:
+                # Non-GPT-5 models use temperature
+                completion_params["temperature"] = self.temperature
+
+            # Add any additional model parameters
+            additional_params = {k: v for k, v in request.model_params.items() if k != "model_name"}
+            completion_params.update(additional_params)
+
+            return completion(**completion_params)
         except RateLimitError as e:
             # This will be caught by the retry decorator
             raise

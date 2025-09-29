@@ -17,8 +17,10 @@ class CostLevel(str, Enum):
 
 
 # Approximate costs per 1K tokens (as of March 2024)
+# Note: GPT-5 models (gpt-5, gpt-5-mini, gpt-5-nano) have different pricing
+# Check https://openai.com/pricing for current GPT-5 pricing
 MODEL_COSTS: Dict[ModelType, float] = {
-    ModelType.OPENAI: 0.03,  # $0.03 per 1K input tokens, $0.06 per 1K output tokens
+    ModelType.OPENAI: 0.03,  # Default: $0.03 per 1K input tokens, $0.06 per 1K output tokens
     ModelType.ANTHROPIC: 0.003,  # $0.003 per 1K input tokens, $0.015 per 1K output tokens
     ModelType.OLLAMA: 0.0,  # Free for local models
 }
