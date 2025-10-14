@@ -189,16 +189,20 @@ class LiteLLMTranslator(ModelInterface):
             }
 
             # GPT-5 models don't support temperature, top_p, or logprobs
-            # They use reasoning effort and verbosity instead
+            # They use reasoning_effort and verbosity instead
             if self._is_gpt5:
-                # Don't include temperature for GPT-5
-                # Could add reasoning and text parameters here if needed
-                # Example: completion_params["reasoning"] = {"effort": "medium"}
-                # Example: completion_params["text"] = {"verbosity": "medium"}
-                pass
+                # Use "low" reasoning for translation (faster, adequate quality)
+                completion_params["reasoning_effort"] = "low"
+                completion_params["verbosity"] = "low"
+
+                self._logger.debug(
+                    "Using GPT-5 parameters: reasoning_effort=low, verbosity=low"
+                )
             else:
                 # Non-GPT-5 models use temperature
                 completion_params["temperature"] = self.temperature
+
+                self._logger.debug(f"Using temperature={self.temperature}")
 
             # Add any additional model parameters
             additional_params = {k: v for k, v in request.model_params.items() if k != "model_name"}
@@ -307,16 +311,32 @@ class LiteLLMTranslator(ModelInterface):
                         raise TranslationError("Invalid response format")
 
                     text = response.choices[0].message.content
-                    tokens = getattr(
-                        response.usage, "total_tokens", 10
-                    )  # Match test expectations
-                    cost = 0.001  # Match test expectations
+
+                    # Get actual token usage from LiteLLM response
+                    tokens = getattr(response.usage, "total_tokens", 0)
+                    input_tokens = getattr(response.usage, "prompt_tokens", 0)
+                    output_tokens = getattr(response.usage, "completion_tokens", 0)
+
+                    # Calculate actual cost using model-specific pricing
+                    from tinbox.core.cost import calculate_model_cost
+
+                    model_string = self._get_model_string(request)
+                    cost = calculate_model_cost(
+                        model_name=model_string,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    )
+
+                    self._logger.debug(
+                        f"Token usage: {input_tokens} input + {output_tokens} output = {tokens} total, "
+                        f"Cost: ${cost:.4f}"
+                    )
 
                     return TranslationResponse(
                         text=text,
                         tokens_used=tokens,
                         cost=cost,
-                        time_taken=0.5,  # Match test expectations
+                        time_taken=0.5,  # Placeholder for now
                     )
                 except TranslationError:
                     raise

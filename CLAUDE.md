@@ -54,8 +54,15 @@ isort src tests           # Sort imports
 ## Key Technical Details
 
 - **Model Specification Format**: `provider:model` (e.g., `anthropic:claude-3-sonnet`, `openai:gpt-4o`, `ollama:mistral-small`)
-  - **GPT-5 Support**: Supports OpenAI's GPT-5 models (`gpt-5`, `gpt-5-mini`, `gpt-5-nano`)
-  - GPT-5 models don't support temperature/top_p parameters, use reasoning effort and verbosity instead
+  - **GPT-5 Support**: Full support for OpenAI's GPT-5 models (`gpt-5`, `gpt-5-mini`, `gpt-5-nano`)
+  - GPT-5 models automatically use optimized translation parameters:
+    - `reasoning_effort="low"` (faster processing, adequate quality for translation)
+    - `verbosity="low"` (concise output without explanations)
+    - Temperature/top_p are NOT supported by GPT-5 (automatically excluded)
+  - **GPT-5 Pricing** (accurate cost tracking implemented):
+    - `gpt-5`: $1.25/$10.00 per 1M tokens (input/output)
+    - `gpt-5-mini`: $0.25/$2.00 per 1M tokens (recommended for most translations)
+    - `gpt-5-nano`: $0.05/$0.40 per 1M tokens (fastest, most economical)
 - **Language codes**: ISO 639-1 format with aliases (e.g., 'en', 'zh', 'es')
 - **Source language 'auto'**: Accepted as valid value for automatic detection in LiteLLM translator
 - **Async architecture**: Core translation operations use asyncio
@@ -71,10 +78,10 @@ tinbox translate --to es document.pdf
 # With specific model
 tinbox translate --model openai:gpt-4o --to fr document.docx
 
-# With GPT-5 models
-tinbox translate --model openai:gpt-5 --to es document.pdf
-tinbox translate --model openai:gpt-5-mini --to fr document.docx
-tinbox translate --model openai:gpt-5-nano --to de document.txt
+# With GPT-5 models (optimized parameters applied automatically)
+tinbox translate --model openai:gpt-5 --to es document.pdf       # Highest quality
+tinbox translate --model openai:gpt-5-mini --to fr document.docx # Recommended
+tinbox translate --model openai:gpt-5-nano --to de document.txt  # Most economical
 
 # Cost estimation only
 tinbox translate --dry-run --to de large_document.pdf

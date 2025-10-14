@@ -17,13 +17,51 @@ class CostLevel(str, Enum):
 
 
 # Approximate costs per 1K tokens (as of March 2024)
-# Note: GPT-5 models (gpt-5, gpt-5-mini, gpt-5-nano) have different pricing
-# Check https://openai.com/pricing for current GPT-5 pricing
+# Note: GPT-5 models (gpt-5, gpt-5-mini, gpt-5-nano) have specific pricing below
+# Check https://openai.com/pricing for current rates
 MODEL_COSTS: Dict[ModelType, float] = {
     ModelType.OPENAI: 0.03,  # Default: $0.03 per 1K input tokens, $0.06 per 1K output tokens
     ModelType.ANTHROPIC: 0.003,  # $0.003 per 1K input tokens, $0.015 per 1K output tokens
     ModelType.OLLAMA: 0.0,  # Free for local models
 }
+
+# Model-specific pricing per 1K tokens (January 2025)
+# GPT-5 models have different pricing than GPT-4
+MODEL_SPECIFIC_COSTS: Dict[str, Dict[str, float]] = {
+    "gpt-5": {"input": 0.00125, "output": 0.01000},  # $1.25/$10.00 per 1M tokens
+    "gpt-5-mini": {"input": 0.00025, "output": 0.00200},  # $0.25/$2.00 per 1M tokens
+    "gpt-5-nano": {"input": 0.00005, "output": 0.00040},  # $0.05/$0.40 per 1M tokens
+}
+
+
+def calculate_model_cost(
+    model_name: str,
+    input_tokens: int,
+    output_tokens: int
+) -> float:
+    """Calculate actual cost based on model-specific pricing.
+
+    Args:
+        model_name: Model name (e.g., "gpt-5", "openai/gpt-5-mini")
+        input_tokens: Number of input tokens
+        output_tokens: Number of output tokens
+
+    Returns:
+        Total cost in USD
+    """
+    # Extract base model name (e.g., "gpt-5" from "openai/gpt-5")
+    base_model = model_name.split("/")[-1] if "/" in model_name else model_name
+
+    # Check if we have specific pricing for this model
+    costs = MODEL_SPECIFIC_COSTS.get(base_model)
+    if costs:
+        input_cost = (input_tokens / 1000) * costs["input"]
+        output_cost = (output_tokens / 1000) * costs["output"]
+        return input_cost + output_cost
+
+    # Fallback: return 0 for unknown models
+    # (The existing cost estimation system handles general pricing)
+    return 0.0
 
 
 def estimate_document_tokens(file_path: Path) -> int:
