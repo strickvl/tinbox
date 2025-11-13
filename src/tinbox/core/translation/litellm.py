@@ -184,22 +184,24 @@ class LiteLLMTranslator(ModelInterface):
             completion_params = {
                 "model": model_string,
                 "messages": self._create_prompt(request),
-                "max_tokens": self.max_tokens,
                 "stream": stream,
             }
 
             # GPT-5 models don't support temperature, top_p, or logprobs
-            # They use reasoning_effort and verbosity instead
             if self._is_gpt5:
-                # Use "low" reasoning for translation (faster, adequate quality)
-                completion_params["reasoning_effort"] = "low"
-                completion_params["verbosity"] = "low"
+                # GPT-5 uses max_completion_tokens instead of max_tokens
+                # Use a higher limit to allow for both reasoning and output tokens
+                completion_params["max_completion_tokens"] = self.max_tokens * 2
+                # Don't set reasoning_effort - GPT-5 models tend to produce only
+                # reasoning tokens (no content) when reasoning_effort is set
+                # Note: Don't set verbosity="low" as it suppresses all output content
 
                 self._logger.debug(
-                    "Using GPT-5 parameters: reasoning_effort=low, verbosity=low"
+                    "Using GPT-5 parameters: max_completion_tokens (no reasoning_effort)"
                 )
             else:
-                # Non-GPT-5 models use temperature
+                # Non-GPT-5 models use max_tokens and temperature
+                completion_params["max_tokens"] = self.max_tokens
                 completion_params["temperature"] = self.temperature
 
                 self._logger.debug(f"Using temperature={self.temperature}")
@@ -207,6 +209,11 @@ class LiteLLMTranslator(ModelInterface):
             # Add any additional model parameters
             additional_params = {k: v for k, v in request.model_params.items() if k != "model_name"}
             completion_params.update(additional_params)
+
+            # Debug logging
+            self._logger.debug(f"Making completion request with params: {completion_params.keys()}")
+            self._logger.debug(f"Model: {completion_params.get('model')}")
+            self._logger.debug(f"Max tokens param: {completion_params.get('max_completion_tokens') or completion_params.get('max_tokens')}")
 
             return completion(**completion_params)
         except RateLimitError as e:
@@ -311,6 +318,14 @@ class LiteLLMTranslator(ModelInterface):
                         raise TranslationError("Invalid response format")
 
                     text = response.choices[0].message.content
+
+                    # Debug logging
+                    self._logger.debug(f"Response text length: {len(text) if text else 0}")
+                    if text:
+                        self._logger.debug(f"Response text preview: {text[:100]}")
+                    else:
+                        self._logger.debug(f"Response text is empty! Full message: {response.choices[0].message}")
+                        self._logger.debug(f"Usage: {response.usage}")
 
                     # Get actual token usage from LiteLLM response
                     tokens = getattr(response.usage, "total_tokens", 0)
