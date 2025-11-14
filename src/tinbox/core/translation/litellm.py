@@ -57,6 +57,8 @@ class LiteLLMTranslator(ModelInterface):
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._logger = logger
+        # Track if we're using GPT-5 models
+        self._is_gpt5 = False
 
     def _get_model_string(self, request: TranslationRequest) -> str:
         """Get the model string for LiteLLM.
@@ -83,6 +85,9 @@ class LiteLLMTranslator(ModelInterface):
         if request.model == ModelType.OLLAMA:
             return f"ollama/{model_name}"
         elif request.model == ModelType.OPENAI:
+            # Check if it's a GPT-5 model
+            if model_name.startswith("gpt-5"):
+                self._is_gpt5 = True
             return model_name  # OpenAI models use their names directly
         elif request.model == ModelType.ANTHROPIC:
             # Anthropic models need anthropic/ prefix according to litellm docs
@@ -172,14 +177,45 @@ class LiteLLMTranslator(ModelInterface):
             TranslationError: If translation fails after retries
         """
         try:
-            return completion(
-                model=self._get_model_string(request),
-                messages=self._create_prompt(request),
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                stream=stream,
-                **{k: v for k, v in request.model_params.items() if k != "model_name"},
-            )
+            # Get the model string first to set _is_gpt5
+            model_string = self._get_model_string(request)
+
+            # Build completion parameters
+            completion_params = {
+                "model": model_string,
+                "messages": self._create_prompt(request),
+                "stream": stream,
+            }
+
+            # GPT-5 models don't support temperature, top_p, or logprobs
+            if self._is_gpt5:
+                # GPT-5 uses max_completion_tokens instead of max_tokens
+                # Use a higher limit to allow for both reasoning and output tokens
+                completion_params["max_completion_tokens"] = self.max_tokens * 2
+                # Don't set reasoning_effort - GPT-5 models tend to produce only
+                # reasoning tokens (no content) when reasoning_effort is set
+                # Note: Don't set verbosity="low" as it suppresses all output content
+
+                self._logger.debug(
+                    "Using GPT-5 parameters: max_completion_tokens (no reasoning_effort)"
+                )
+            else:
+                # Non-GPT-5 models use max_tokens and temperature
+                completion_params["max_tokens"] = self.max_tokens
+                completion_params["temperature"] = self.temperature
+
+                self._logger.debug(f"Using temperature={self.temperature}")
+
+            # Add any additional model parameters
+            additional_params = {k: v for k, v in request.model_params.items() if k != "model_name"}
+            completion_params.update(additional_params)
+
+            # Debug logging
+            self._logger.debug(f"Making completion request with params: {completion_params.keys()}")
+            self._logger.debug(f"Model: {completion_params.get('model')}")
+            self._logger.debug(f"Max tokens param: {completion_params.get('max_completion_tokens') or completion_params.get('max_tokens')}")
+
+            return completion(**completion_params)
         except RateLimitError as e:
             # This will be caught by the retry decorator
             raise
@@ -282,16 +318,40 @@ class LiteLLMTranslator(ModelInterface):
                         raise TranslationError("Invalid response format")
 
                     text = response.choices[0].message.content
-                    tokens = getattr(
-                        response.usage, "total_tokens", 10
-                    )  # Match test expectations
-                    cost = 0.001  # Match test expectations
+
+                    # Debug logging
+                    self._logger.debug(f"Response text length: {len(text) if text else 0}")
+                    if text:
+                        self._logger.debug(f"Response text preview: {text[:100]}")
+                    else:
+                        self._logger.debug(f"Response text is empty! Full message: {response.choices[0].message}")
+                        self._logger.debug(f"Usage: {response.usage}")
+
+                    # Get actual token usage from LiteLLM response
+                    tokens = getattr(response.usage, "total_tokens", 0)
+                    input_tokens = getattr(response.usage, "prompt_tokens", 0)
+                    output_tokens = getattr(response.usage, "completion_tokens", 0)
+
+                    # Calculate actual cost using model-specific pricing
+                    from tinbox.core.cost import calculate_model_cost
+
+                    model_string = self._get_model_string(request)
+                    cost = calculate_model_cost(
+                        model_name=model_string,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    )
+
+                    self._logger.debug(
+                        f"Token usage: {input_tokens} input + {output_tokens} output = {tokens} total, "
+                        f"Cost: ${cost:.4f}"
+                    )
 
                     return TranslationResponse(
                         text=text,
                         tokens_used=tokens,
                         cost=cost,
-                        time_taken=0.5,  # Match test expectations
+                        time_taken=0.5,  # Placeholder for now
                     )
                 except TranslationError:
                     raise

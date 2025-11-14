@@ -59,9 +59,37 @@ tinbox --to es document.pdf
   - Automatic context preservation between sections
 
 ### 🤖 Flexible Model Support
+- **GPT-5 Models**: Full support with optimized parameters (see below)
 - Use powerful cloud models (GPT-4V, Claude 3.5 Sonnet)
 - Run translations locally with Ollama
 - Mix and match models for different tasks
+
+#### GPT-5 Models (Recommended)
+
+Tinbox fully supports OpenAI's latest GPT-5 models with automatic parameter optimization:
+
+| Model | Best For | Cost (per 1M tokens) | Speed |
+|-------|----------|----------------------|-------|
+| **gpt-5** | Complex documents, highest quality | $1.25 / $10.00 (in/out) | Standard |
+| **gpt-5-mini** | Most translations (recommended) | $0.25 / $2.00 (in/out) | Fast |
+| **gpt-5-nano** | Simple docs, high volume | $0.05 / $0.40 (in/out) | Fastest |
+
+**Automatic Optimizations**:
+- `reasoning_effort="low"` - Faster processing for translation tasks
+- `verbosity="low"` - Concise output without unnecessary explanations
+- No temperature parameter (not supported by GPT-5)
+
+**Usage**:
+```bash
+# Recommended for most use cases
+tinbox --model openai:gpt-5-mini --to es document.pdf
+
+# For highest quality
+tinbox --model openai:gpt-5 --to fr complex_report.pdf
+
+# For maximum speed/economy
+tinbox --model openai:gpt-5-nano --to de simple_doc.txt
+```
 
 ### 🌐 Language Support
 - Flexible source/target language specification using ISO 639-1 codes

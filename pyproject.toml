@@ -36,6 +36,11 @@ dependencies = [
 [project.optional-dependencies]
 pdf = ["pdf2image>=1.17.0"]
 docx = ["python-docx>=1.1.0"]
+gui = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "websockets>=12.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.5",

@@ -172,3 +172,9 @@ cython_debug/
 
 # Project-specific files
 design/
+
+# macOS
+.DS_Store
+
+# Local translation files
+durex/
