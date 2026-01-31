@@ -2,7 +2,7 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal, Optional, Dict, List
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -34,7 +34,7 @@ class TranslationConfig(BaseModel):
     model_name: str = Field(
         description="Specific model name (e.g., 'gpt-4o' for OpenAI, 'claude-3-sonnet' for Anthropic)",
     )
-    algorithm: Literal["page", "sliding-window"]
+    algorithm: Literal["page", "sliding-window", "context-aware"]
     input_file: Path
     output_file: Optional[Path] = None
 
@@ -76,6 +76,17 @@ class TranslationConfig(BaseModel):
         description="Overlap size for sliding window translation",
     )
 
+    # Context-aware algorithm specific settings
+    context_size: Optional[int] = Field(
+        default=2000,
+        gt=0,
+        description="Target size for context-aware chunks (characters)",
+    )
+    custom_split_token: Optional[str] = Field(
+        default=None,
+        description="Custom token to split text on (context-aware only, ignores context_size)",
+    )
+
     # Checkpoint settings
     checkpoint_dir: Optional[Path] = Field(
         default=None,
@@ -91,9 +102,22 @@ class TranslationConfig(BaseModel):
         description="Whether to try resuming from checkpoint",
     )
 
+    # Glossary settings (optional feature; disabled by default)
+    use_glossary: bool = Field(
+        default=False,
+        description="Enable glossary for consistent term translations.",
+    )
+
+    # Model reasoning settings
+    reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(
+        default="minimal",
+        description="Model reasoning effort level. Higher levels improve quality but increase cost and time significantly.",
+    )
+
     model_config = ConfigDict(
         frozen=True,  # Make config immutable
         arbitrary_types_allowed=True,  # Allow Callable type for progress_callback
+        protected_namespaces=(),  # Allow model_* field names
     )
 
 
@@ -104,5 +128,49 @@ class TranslationResult(BaseModel):
     tokens_used: int = Field(ge=0)
     cost: float = Field(ge=0.0)
     time_taken: float = Field(ge=0.0)
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ----------------------
+# Glossary data types
+# ----------------------
+
+class GlossaryEntry(BaseModel):
+    """A single glossary entry mapping source term to target translation."""
+
+    term: str = Field(description="Term in source language")
+    translation: str = Field(description="Translation in target language")
+
+    model_config = ConfigDict(frozen=True)
+
+
+class Glossary(BaseModel):
+    """Collection of translation glossary entries."""
+
+    entries: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping from source terms to target translations",
+    )
+
+    def extend(self, new_entries: List[GlossaryEntry]) -> "Glossary":
+        """Extend glossary with multiple entries and return new instance."""
+        if not new_entries:
+            return Glossary(entries=self.entries.copy())
+        updated_entries = self.entries.copy()
+        for entry in new_entries:
+            # Last write wins; overwrite existing to ensure latest consistent mapping
+            updated_entries[entry.term] = entry.translation
+        return Glossary(entries=updated_entries)
+
+    def to_context_string(self) -> str:
+        """Convert glossary to context string for LLM consumption."""
+        if not self.entries:
+            return "[The glossary is still empty… add terms as they are encountered.]"
+        lines: List[str] = ["[GLOSSARY]"]
+        for term, translation in self.entries.items():
+            lines.append(f"{term} -> {translation}")
+        lines.append("[/GLOSSARY]")
+        return "\n".join(lines)
 
     model_config = ConfigDict(frozen=True)

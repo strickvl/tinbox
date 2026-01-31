@@ -1,11 +1,12 @@
 """PDF document processor implementation."""
 
+import io
+import shutil
 from pathlib import Path
 from typing import AsyncIterator, Union
 
 import pypdf
 from pdf2image import convert_from_path
-import io
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
@@ -16,6 +17,21 @@ from tinbox.core.processor import (
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _check_poppler_available() -> None:
+    """Check if poppler-utils is available on the system."""
+    if shutil.which("pdfinfo") is None:
+        raise ProcessingError(
+            "poppler-utils is not installed. PDF processing requires poppler-utils to be installed on your system.\n\n"
+            "Installation instructions:\n"
+            "- macOS: brew install poppler\n"
+            "- Ubuntu/Debian: sudo apt-get install poppler-utils\n"
+            "- CentOS/RHEL: sudo yum install poppler-utils\n"
+            "- Fedora: sudo dnf install poppler-utils\n"
+            "- Windows: Download from https://github.com/oschwartz10612/poppler-windows/releases/\n\n"
+            "For more details, see the README.md file."
+        )
 
 
 class PdfProcessor(BaseDocumentProcessor):
@@ -98,6 +114,9 @@ class PdfProcessor(BaseDocumentProcessor):
         """
         if not file_path.exists():
             raise ProcessingError("File not found")
+
+        # Check if poppler is available before proceeding
+        _check_poppler_available()
 
         # Validate page range
         if start_page < 1:

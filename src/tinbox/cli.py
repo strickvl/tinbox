@@ -8,7 +8,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich.table import Table
 
 from tinbox.core import (
@@ -18,9 +18,11 @@ from tinbox.core import (
     TranslationResult,
     translate_document,
 )
+from tinbox.core.translation.checkpoint import CheckpointManager
 from tinbox.core.cost import estimate_cost
 from tinbox.core.processor import load_document
 from tinbox.core.translation import create_translator
+from tinbox.core.translation.glossary import GlossaryManager
 from tinbox.core.output import (
     OutputFormat,
     TranslationMetadata,
@@ -28,6 +30,7 @@ from tinbox.core.output import (
     create_handler,
 )
 from tinbox.utils.logging import configure_logging, get_logger
+from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn
 
 app = typer.Typer(
     name="tinbox",
@@ -83,7 +86,7 @@ def display_cost_estimate(estimate, model: ModelType) -> None:
     table.add_row("Estimated Tokens", f"{estimate.estimated_tokens:,}")
     if model != ModelType.OLLAMA:
         table.add_row("Estimated Cost", f"${estimate.estimated_cost:.2f}")
-    table.add_row("Estimated Time", f"{estimate.estimated_time / 60:.1f} minutes")
+    table.add_row("Estimated Time", f"{estimate.estimated_time / 60:.1f} minutes" if estimate.estimated_time > 60 else "<1 minute")
     table.add_row("Cost Level", estimate.cost_level.value.title())
 
     console.print(table)
@@ -157,16 +160,26 @@ def translate(
         help="Target language code. Defaults to 'en' (English).",
     ),
     model: str = typer.Option(
-        "anthropic:claude-3-sonnet",
+        ...,
         "--model",
         "-m",
         help="Model to use (e.g., 'openai:gpt-4o', 'anthropic:claude-3-sonnet', 'ollama:mistral-small').",
     ),
     algorithm: str = typer.Option(
-        "page",
+        "context-aware",
         "--algorithm",
         "-a",
-        help="Translation algorithm to use: 'page' or 'sliding-window'.",
+        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware' (recommended).",
+    ),
+    context_size: Optional[int] = typer.Option(
+        2000,
+        "--context-size",
+        help="Target chunk size for context-aware algorithm (characters).",
+    ),
+    custom_split_token: Optional[str] = typer.Option(
+        None,
+        "--split-token",
+        help="Custom token to split text on (context-aware only).",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -188,9 +201,47 @@ def translate(
         "--verbose",
         help="Show detailed progress information.",
     ),
+    checkpoint_dir: Optional[Path] = typer.Option(
+        None,
+        "--checkpoint-dir",
+        help="Directory to store translation checkpoints for resuming interrupted translations.",
+    ),
+    checkpoint_frequency: int = typer.Option(
+        1,
+        "--checkpoint-frequency",
+        help="Save checkpoint every N pages/chunks (default: 1).",
+    ),
+    use_glossary: bool = typer.Option(
+        False,
+        "--glossary",
+        help="Enable glossary for consistent term translations.",
+    ),
+    glossary_file: Optional[Path] = typer.Option(
+        None,
+        "--glossary-file",
+        help="Path to existing glossary file (JSON format) to load initial terms from.",
+    ),
+    save_glossary: Optional[Path] = typer.Option(
+        None,
+        "--save-glossary",
+        help="Path to save the updated glossary after translation.",
+    ),
+    reasoning_effort: str = typer.Option(
+        "minimal",
+        "--reasoning-effort",
+        help="Model reasoning effort level (minimal, low, medium, high). Higher levels improve quality but increase cost and time significantly.",
+    ),
 ) -> None:
     """Translate a document using LLMs."""
     try:
+        # Validate reasoning effort parameter
+        valid_reasoning_efforts = ["minimal", "low", "medium", "high"]
+        if reasoning_effort not in valid_reasoning_efforts:
+            raise ValueError(
+                f"Invalid reasoning effort '{reasoning_effort}'. "
+                f"Valid options: {', '.join(valid_reasoning_efforts)}"
+            )
+
         # Parse model specification
         model_type, model_name = parse_model_spec(model)
 
@@ -201,7 +252,10 @@ def translate(
         estimate = estimate_cost(
             input_file,
             model_type,
+            algorithm=algorithm,
             max_cost=max_cost,
+            use_glossary=use_glossary,
+            reasoning_effort=reasoning_effort,
         )
 
         # Display cost estimate
@@ -234,6 +288,12 @@ def translate(
             force=force,
             max_cost=max_cost,
             verbose=verbose,
+            context_size=context_size,
+            custom_split_token=custom_split_token,
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_frequency=checkpoint_frequency,
+            use_glossary=use_glossary,
+            reasoning_effort=reasoning_effort,
         )
 
         # Load document
@@ -242,10 +302,29 @@ def translate(
         # Initialize model interface
         translator = create_translator(config)
 
+        # Create checkpoint manager if checkpoint directory is specified
+        checkpoint_manager = None
+        if config.checkpoint_dir:
+            checkpoint_manager = CheckpointManager(config)
+
+        # Initialize glossary manager
+        glossary_manager = None
+        if use_glossary:
+            if glossary_file:
+                glossary_manager = GlossaryManager.load_from_file(glossary_file)
+            else:
+                glossary_manager = GlossaryManager()
+
         # Show progress
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            CurrentCostColumn(),
+            EstimatedCostColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
             console=console,
         ) as progress:
             # Run translation
@@ -255,6 +334,8 @@ def translate(
                     config=config,
                     translator=translator,
                     progress=progress,
+                    checkpoint_manager=checkpoint_manager,
+                    glossary_manager=glossary_manager,
                 )
             )
 
@@ -283,6 +364,14 @@ def translate(
         # Get appropriate output handler
         handler = create_handler(output_format)
         handler.write(output, output_file)
+
+        # Save glossary if requested
+        if glossary_manager and save_glossary:
+            glossary_manager.save_to_file(save_glossary)
+
+        # Clean up checkpoints after successful output
+        if checkpoint_manager:
+            asyncio.run(checkpoint_manager.cleanup_old_checkpoints(config.input_file))
 
         # Show final statistics (only for text output)
         if output_format == OutputFormat.TEXT:

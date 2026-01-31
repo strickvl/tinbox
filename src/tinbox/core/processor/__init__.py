@@ -163,22 +163,18 @@ def get_processor_for_file_type(file_type: FileType) -> DocumentProcessor:
     Raises:
         ProcessingError: If no processor is available for the file type
     """
-    # Import processors here to avoid circular imports
-    from tinbox.core.processor.docx import WordProcessor as DocxProcessor
-    from tinbox.core.processor.pdf import PdfProcessor
-    from tinbox.core.processor.text import TextProcessor
-
-    processors: Dict[FileType, Type[DocumentProcessor]] = {
-        FileType.PDF: PdfProcessor,
-        FileType.DOCX: DocxProcessor,
-        FileType.TXT: TextProcessor,
-    }
-
-    processor_class = processors.get(file_type)
-    if not processor_class:
+    # Import processors lazily to avoid loading unnecessary dependencies
+    if file_type == FileType.PDF:
+        from tinbox.core.processor.pdf import PdfProcessor
+        return PdfProcessor()
+    elif file_type == FileType.DOCX:
+        from tinbox.core.processor.docx import WordProcessor as DocxProcessor
+        return DocxProcessor()
+    elif file_type == FileType.TXT:
+        from tinbox.core.processor.text import TextProcessor
+        return TextProcessor()
+    else:
         raise ProcessingError(f"No processor available for file type: {file_type}")
-
-    return processor_class()
 
 
 async def load_document(file_path: Path) -> DocumentContent:

@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict, AsyncIterator
+from typing import Any, Dict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -27,6 +27,9 @@ def translator() -> LiteLLMTranslator:
 def mock_completion():
     """Create a mock completion response."""
     with patch("tinbox.core.translation.litellm.completion") as mock:
+        # Mock response content as JSON string (matching real LiteLLM response format)
+        response_content = '{"translation": "Translated text", "glossary_extension": []}'
+
         mock.return_value = type(
             "CompletionResponse",
             (),
@@ -36,11 +39,12 @@ def mock_completion():
                         "Choice",
                         (),
                         {
+                            "finish_reason": "stop",
                             "message": type(
                                 "Message",
                                 (),
-                                {"content": "Translated text"},
-                            )
+                                {"content": response_content},
+                            )()
                         },
                     )
                 ],
@@ -52,49 +56,15 @@ def mock_completion():
                         "cost": 0.001,
                         "completion_time": 0.5,
                     },
-                ),
+                )(),
+                "_hidden_params": {
+                    "response_cost": 0.001
+                },
             },
         )
         yield mock
 
 
-@pytest.fixture
-def mock_streaming_completion():
-    """Create a mock streaming completion response."""
-
-    async def mock_stream():
-        yield type(
-            "CompletionChunk",
-            (),
-            {
-                "choices": [
-                    type(
-                        "Choice",
-                        (),
-                        {
-                            "delta": type(
-                                "Delta",
-                                (),
-                                {"content": "Translated text"},
-                            )
-                        },
-                    )
-                ],
-                "usage": type(
-                    "Usage",
-                    (),
-                    {
-                        "total_tokens": 10,
-                        "cost": 0.001,
-                        "completion_time": 0.5,
-                    },
-                ),
-            },
-        )
-
-    with patch("tinbox.core.translation.litellm.completion") as mock:
-        mock.return_value = mock_stream()
-        yield mock
 
 
 @pytest.mark.asyncio
@@ -104,6 +74,7 @@ async def test_text_translation(translator: LiteLLMTranslator, mock_completion):
         source_lang="en",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -113,7 +84,7 @@ async def test_text_translation(translator: LiteLLMTranslator, mock_completion):
     assert response.text == "Translated text"
     assert response.tokens_used == 10
     assert response.cost == 0.001
-    assert response.time_taken == 0.5
+    assert response.time_taken > 0  # Real time calculation
 
 
 @pytest.mark.asyncio
@@ -130,6 +101,7 @@ async def test_image_translation(
         source_lang="en",
         target_lang="es",
         content=image_path.read_bytes(),
+        context=None,
         content_type="image/png",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -139,28 +111,7 @@ async def test_image_translation(
     assert response.text == "Translated text"
     assert response.tokens_used == 10
     assert response.cost == 0.001
-    assert response.time_taken == 0.5
-
-
-@pytest.mark.asyncio
-async def test_streaming_translation(
-    translator: LiteLLMTranslator, mock_streaming_completion
-):
-    """Test streaming translation responses."""
-    request = TranslationRequest(
-        source_lang="en",
-        target_lang="es",
-        content="Hello, world!",
-        content_type="text/plain",
-        model=ModelType.ANTHROPIC,
-        model_params={"model_name": "claude-3-sonnet"},
-    )
-
-    async for chunk in await translator.translate(request, stream=True):
-        assert chunk.text == "Translated text"
-        assert chunk.tokens_used == 10
-        assert chunk.cost == 0.001
-        assert chunk.time_taken == 0.5
+    assert response.time_taken > 0  # Real time calculation
 
 
 @pytest.mark.asyncio
@@ -180,6 +131,7 @@ async def test_translation_error_handling(translator: LiteLLMTranslator, monkeyp
         source_lang="en",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -197,26 +149,34 @@ async def test_empty_content(translator: LiteLLMTranslator, mock_completion):
         source_lang="en",
         target_lang="es",
         content="",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
     )
 
-    with pytest.raises(TranslationError, match="Translation failed: Empty content"):
-        await translator.translate(request)
+    response = await translator.translate(request)
+    assert response.text == ""
+    assert response.tokens_used == 0
+    assert response.cost == 0.0
+    assert response.time_taken > 0
 
     # Whitespace only
     request = TranslationRequest(
         source_lang="en",
         target_lang="es",
         content="   \n   ",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
     )
 
-    with pytest.raises(TranslationError, match="Translation failed: Empty content"):
-        await translator.translate(request)
+    response = await translator.translate(request)
+    assert response.text == "   \n   "
+    assert response.tokens_used == 0
+    assert response.cost == 0.0
+    assert response.time_taken > 0
 
 
 @pytest.mark.asyncio
@@ -227,13 +187,15 @@ async def test_long_content(translator: LiteLLMTranslator, mock_completion):
         source_lang="en",
         target_lang="es",
         content=long_text,
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
     )
 
     response = await translator.translate(request)
-    assert response.text == "Translated text"
+    # Should preserve the trailing space from the original long_text
+    assert response.text == "Translated text "
 
 
 @pytest.mark.asyncio
@@ -244,6 +206,7 @@ async def test_special_characters(translator: LiteLLMTranslator, mock_completion
         source_lang="en",
         target_lang="es",
         content=special_text,
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -260,6 +223,7 @@ async def test_invalid_model_params(translator: LiteLLMTranslator, mock_completi
         source_lang="en",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet", "invalid_param": "value"},
@@ -277,6 +241,7 @@ async def test_malformed_image(translator: LiteLLMTranslator, mock_completion):
         source_lang="en",
         target_lang="es",
         content=invalid_image_data,
+        context=None,
         content_type="image/png",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -304,6 +269,7 @@ async def test_timeout_handling(translator: LiteLLMTranslator, monkeypatch):
         source_lang="en",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -329,6 +295,7 @@ async def test_rate_limit_handling(translator: LiteLLMTranslator, monkeypatch):
         source_lang="en",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -348,6 +315,7 @@ async def test_invalid_language_codes(translator: LiteLLMTranslator, mock_comple
         source_lang="invalid",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -363,6 +331,7 @@ async def test_invalid_language_codes(translator: LiteLLMTranslator, mock_comple
         source_lang="en",
         target_lang="invalid",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -381,6 +350,7 @@ async def test_auto_language_detection(translator: LiteLLMTranslator, mock_compl
         source_lang="auto",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -390,7 +360,7 @@ async def test_auto_language_detection(translator: LiteLLMTranslator, mock_compl
     assert response.text == "Translated text"
     assert response.tokens_used == 10
     assert response.cost == 0.001
-    assert response.time_taken == 0.5
+    assert response.time_taken > 0  # Real time calculation
 
 
 @pytest.mark.asyncio
@@ -402,6 +372,7 @@ async def test_mixed_content_handling(translator: LiteLLMTranslator, mock_comple
         source_lang="en",
         target_lang="es",
         content=mixed_content,
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -436,6 +407,7 @@ async def test_response_validation(translator: LiteLLMTranslator, monkeypatch):
         source_lang="en",
         target_lang="es",
         content="Hello, world!",
+        context=None,
         content_type="text/plain",
         model=ModelType.ANTHROPIC,
         model_params={"model_name": "claude-3-sonnet"},
@@ -443,3 +415,89 @@ async def test_response_validation(translator: LiteLLMTranslator, monkeypatch):
 
     with pytest.raises(TranslationError, match="No response from model"):
         await translator.translate(request)
+
+
+@pytest.mark.asyncio
+async def test_whitespace_preservation_simple(translator: LiteLLMTranslator, mock_completion):
+    """Test simple whitespace preservation."""
+    request = TranslationRequest(
+        source_lang="en",
+        target_lang="es",
+        content="   Hello, world!   ",
+        context=None,
+        content_type="text/plain",
+        model=ModelType.ANTHROPIC,
+        model_params={"model_name": "claude-3-sonnet"},
+    )
+
+    response = await translator.translate(request)
+    # Should preserve leading and trailing whitespace
+    assert response.text == "   Translated text   "
+    assert response.tokens_used == 10
+    assert response.cost == 0.001
+    assert response.time_taken > 0
+
+
+@pytest.mark.asyncio
+async def test_whitespace_preservation_complex(translator: LiteLLMTranslator, mock_completion):
+    """Test complex whitespace preservation with newlines."""
+    request = TranslationRequest(
+        source_lang="en",
+        target_lang="es",
+        content="\n\n  Hello, world!\n  ",
+        context=None,
+        content_type="text/plain",
+        model=ModelType.ANTHROPIC,
+        model_params={"model_name": "claude-3-sonnet"},
+    )
+
+    response = await translator.translate(request)
+    # Should preserve complex whitespace patterns
+    assert response.text == "\n\n  Translated text\n  "
+    assert response.tokens_used == 10
+    assert response.cost == 0.001
+    assert response.time_taken > 0
+
+
+@pytest.mark.asyncio
+async def test_context_handling(translator: LiteLLMTranslator, mock_completion):
+    """Test context handling in prompt construction."""
+    context_info = "[PREVIOUS_CHUNK]\nPrevious text\n[/PREVIOUS_CHUNK]\n\n[PREVIOUS_CHUNK_TRANSLATION]\nTexto anterior\n[/PREVIOUS_CHUNK_TRANSLATION]\n\nUse this context to maintain consistency in terminology and style."
+    
+    request = TranslationRequest(
+        source_lang="en",
+        target_lang="es",
+        content="Current text",
+        context=context_info,
+        content_type="text/plain",
+        model=ModelType.ANTHROPIC,
+        model_params={"model_name": "claude-3-sonnet"},
+    )
+
+    response = await translator.translate(request)
+    assert response.text == "Translated text"
+    assert response.tokens_used == 10
+    assert response.cost == 0.001
+    assert response.time_taken > 0
+
+
+@pytest.mark.asyncio
+async def test_context_without_context(translator: LiteLLMTranslator, mock_completion):
+    """Test translation without context (context=None)."""
+    request = TranslationRequest(
+        source_lang="en",
+        target_lang="es",
+        content="Hello, world!",
+        context=None,
+        content_type="text/plain",
+        model=ModelType.ANTHROPIC,
+        model_params={"model_name": "claude-3-sonnet"},
+    )
+
+    response = await translator.translate(request)
+    assert response.text == "Translated text"
+    assert response.tokens_used == 10
+    assert response.cost == 0.001
+    assert response.time_taken > 0
+
+
