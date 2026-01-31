@@ -9,7 +9,6 @@ from tinbox.core.processor import DocumentContent
 from tinbox.core.translation.algorithms import (
     create_windows,
     merge_chunks,
-    repair_seams,
     translate_context_aware,
     translate_document,
     translate_page_by_page,
@@ -326,24 +325,6 @@ async def test_translation_all_pages_fail(
 
 
 # Helper function tests
-async def test_repair_seams(mock_translator):
-    """Test seam repair functionality."""
-    pages = ["First page content.", "Second page content.", "Third page content."]
-    config = TranslationConfig(
-        source_lang="en",
-        target_lang="fr",
-        model=ModelType.ANTHROPIC,
-        model_name="claude-3-sonnet",
-        algorithm="page",
-        input_file=Path("test.txt"),
-        page_seam_overlap=10,
-    )
-
-    result = await repair_seams(pages, config, mock_translator)
-    assert result
-    assert isinstance(result, str)
-
-
 def test_create_windows():
     """Test window creation for sliding window translation."""
     text = "This is a test text for window creation."

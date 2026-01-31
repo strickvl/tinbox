@@ -322,7 +322,7 @@ async def test_invalid_language_codes(translator: LiteLLMTranslator, mock_comple
     )
 
     with pytest.raises(
-        TranslationError, match="Translation failed: Invalid language code"
+        TranslationError, match="Translation failed.*Unsupported language code"
     ):
         await translator.translate(request)
 
@@ -338,9 +338,28 @@ async def test_invalid_language_codes(translator: LiteLLMTranslator, mock_comple
     )
 
     with pytest.raises(
-        TranslationError, match="Translation failed: Invalid language code"
+        TranslationError, match="Translation failed.*Unsupported language code"
     ):
         await translator.translate(request)
+
+
+@pytest.mark.asyncio
+async def test_hyphenated_language_codes(translator: LiteLLMTranslator, mock_completion):
+    """Test that hyphenated language codes like zh-tw are supported."""
+    # Traditional Chinese (zh-tw) should be valid
+    request = TranslationRequest(
+        source_lang="zh-tw",
+        target_lang="en",
+        content="你好世界",
+        context=None,
+        content_type="text/plain",
+        model=ModelType.ANTHROPIC,
+        model_params={"model_name": "claude-3-sonnet"},
+    )
+
+    # Should not raise - hyphenated codes are valid
+    response = await translator.translate(request)
+    assert response.text == "Translated text"
 
 
 @pytest.mark.asyncio

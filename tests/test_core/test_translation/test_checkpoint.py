@@ -301,20 +301,20 @@ class TestUtilityFunctions:
         config = sample_config.model_copy(update={"checkpoint_dir": non_existent_dir})
         assert should_resume(config) is False
 
-    def test_load_checkpoint_should_not_resume(self, sample_config):
+    async def test_load_checkpoint_should_not_resume(self, sample_config):
         """Test load_checkpoint returns None when should not resume."""
         config = sample_config.model_copy(update={"resume_from_checkpoint": False})
-        result = load_checkpoint(config)
+        result = await load_checkpoint(config)
         assert result is None
 
-    def test_load_checkpoint_calls_manager(self, sample_config):
+    async def test_load_checkpoint_calls_manager(self, sample_config):
         """Test load_checkpoint calls CheckpointManager.load."""
         with patch("tinbox.core.translation.checkpoint.CheckpointManager") as mock_manager_class:
             mock_manager = mock_manager_class.return_value
-            mock_manager.load.return_value = None
-            
-            result = load_checkpoint(sample_config)
-            
+            mock_manager.load = AsyncMock(return_value=None)
+
+            result = await load_checkpoint(sample_config)
+
             mock_manager_class.assert_called_once_with(sample_config)
             mock_manager.load.assert_called_once()
             assert result is None
@@ -445,7 +445,11 @@ class TestResumeFromCheckpoint:
         assert result.translated_items == ["Translated page 1", "Translated page 2", "Translated page 3"]
         assert result.total_tokens == 150
         assert result.total_cost == 0.015
-        assert result.metadata == {}  # No special metadata for page algorithm
+        # Metadata should include translated_chunks for page-number mapping
+        assert "translated_chunks" in result.metadata
+        assert result.metadata["translated_chunks"] == {
+            1: "Translated page 1", 2: "Translated page 2", 3: "Translated page 3"
+        }
         
         manager.load.assert_called_once()
 
@@ -476,7 +480,11 @@ class TestResumeFromCheckpoint:
         assert result.translated_items == ["Translated window 1", "Translated window 2"]
         assert result.total_tokens == 100
         assert result.total_cost == 0.01
-        assert result.metadata == {}  # No special metadata for sliding window
+        # Metadata should include translated_chunks
+        assert "translated_chunks" in result.metadata
+        assert result.metadata["translated_chunks"] == {
+            1: "Translated window 1", 2: "Translated window 2"
+        }
 
     async def test_resume_successful_context_aware_algorithm(self, sample_config):
         """Test successful resume for context-aware algorithm."""
@@ -540,7 +548,9 @@ class TestResumeFromCheckpoint:
         assert result.translated_items == ["Translated chunk 1", "Translated chunk 2"]
         assert result.total_tokens == 200
         assert result.total_cost == 0.02
-        assert result.metadata == {}  # No context metadata without source chunks
+        # Still has translated_chunks, but no context (previous_chunk/previous_translation) without source chunks
+        assert "translated_chunks" in result.metadata
+        assert "previous_chunk" not in result.metadata
 
     async def test_resume_context_aware_insufficient_chunks(self, sample_config):
         """Test context-aware resume when there are not enough source chunks."""
@@ -572,7 +582,9 @@ class TestResumeFromCheckpoint:
         assert result.translated_items == ["Translated chunk 1", "Translated chunk 2", "Translated chunk 3"]
         assert result.total_tokens == 300
         assert result.total_cost == 0.03
-        assert result.metadata == {}  # No context metadata when chunk index is out of range
+        # Still has translated_chunks, but no context when chunk index is out of range
+        assert "translated_chunks" in result.metadata
+        assert "previous_chunk" not in result.metadata
 
     async def test_resume_with_non_sequential_chunk_keys(self, sample_config):
         """Test resume with non-sequential chunk keys in checkpoint."""
@@ -773,7 +785,7 @@ class TestResumeFromCheckpoint:
         assert result.translated_items == ["Translated page 1", "Translated page 2", "Translated page 3"]
         assert result.total_tokens == 150
         assert result.total_cost == 0.015
-        assert result.metadata == {}
+        assert "translated_chunks" in result.metadata
 
     async def test_resume_all_chunks_completed_context_aware(self, sample_config):
         """Test context-aware resume when all chunks have been translated previously."""

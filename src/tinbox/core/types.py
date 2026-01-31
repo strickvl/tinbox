@@ -60,11 +60,6 @@ class TranslationConfig(BaseModel):
     )
 
     # Algorithm-specific settings
-    page_seam_overlap: int = Field(
-        default=200,
-        gt=0,
-        description="Token overlap for page-by-page translation",
-    )
     window_size: int = Field(
         default=2000,
         gt=0,

@@ -13,20 +13,17 @@ from tinbox.core.types import TranslationConfig
 def create_translator(config: TranslationConfig) -> ModelInterface:
     """Create a translator instance based on configuration.
 
+    Note: Model selection (provider/model_name) is handled per-request via
+    TranslationRequest.model and TranslationRequest.model_params, not at
+    translator construction time.
+
     Args:
         config: Translation configuration
 
     Returns:
         Configured translator instance
     """
-    translator = LiteLLMTranslator()
-
-    # Create translation request with model-specific parameters
-    model_params = {}
-    if config.model_name:
-        model_params["model_name"] = config.model_name
-
-    return translator
+    return LiteLLMTranslator()
 
 
 __all__ = [

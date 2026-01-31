@@ -58,7 +58,6 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 4. **Quality and Consistency**
    - Smart algorithms ensure consistent translations across document sections
    - Maintains context between pages and segments
-   - Repairs potential inconsistencies at section boundaries
    - Uses glossary to maintain consistent terminology
 
 ## ✨ Features
@@ -72,9 +71,9 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 ### 🧠 Intelligent Translation
 
 - **Smart Algorithms**:
-  - Page-by-Page with Seam Repair (default for PDF)
+  - Page-by-Page (used for PDF documents)
   - Sliding Window for long text documents (deprecated)
-  - Context-Aware algorithm with smart text splitting for large text documents
+  - Context-Aware algorithm with smart text splitting (default for text documents)
 
 ### 🤖 Flexible Model Support
 

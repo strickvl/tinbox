@@ -165,11 +165,11 @@ def translate(
         "-m",
         help="Model to use (e.g., 'openai:gpt-4o', 'anthropic:claude-3-sonnet', 'ollama:mistral-small').",
     ),
-    algorithm: str = typer.Option(
-        "context-aware",
+    algorithm: Optional[str] = typer.Option(
+        None,
         "--algorithm",
         "-a",
-        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware' (recommended).",
+        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware'. Auto-selects based on file type if not specified (PDF→page, text→context-aware).",
     ),
     context_size: Optional[int] = typer.Option(
         2000,
@@ -248,11 +248,26 @@ def translate(
         # Determine file type
         file_type = FileType(input_file.suffix.lstrip(".").lower())
 
+        # Auto-select algorithm based on file type, or validate user's choice
+        if algorithm is None:
+            # Auto-select: PDF needs 'page' algorithm, text files use 'context-aware'
+            effective_algorithm = "page" if file_type == FileType.PDF else "context-aware"
+        else:
+            effective_algorithm = algorithm
+            # Validate: PDF files only work with 'page' algorithm
+            if file_type == FileType.PDF and algorithm != "page":
+                console.print(
+                    f"\n[red]Error:[/red] PDF files only support the 'page' algorithm.\n"
+                    f"PDFs are processed as images and cannot use '{algorithm}' algorithm.\n"
+                    f"Please use: tinbox translate {input_file} --algorithm page --model {model}"
+                )
+                raise typer.Exit(1)
+
         # Get cost estimate
         estimate = estimate_cost(
             input_file,
             model_type,
-            algorithm=algorithm,
+            algorithm=effective_algorithm,
             max_cost=max_cost,
             use_glossary=use_glossary,
             reasoning_effort=reasoning_effort,
@@ -282,7 +297,7 @@ def translate(
             target_lang=target_lang,
             model=model_type,
             model_name=model_name,
-            algorithm=algorithm,
+            algorithm=effective_algorithm,
             input_file=input_file,
             output_file=output_file,
             force=force,

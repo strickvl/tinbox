@@ -27,6 +27,7 @@ from tinbox.core.translation.interface import (
 )
 from tinbox.core.types import ModelType, GlossaryEntry
 from tinbox.utils.chunks import extract_whitespace_formatting
+from tinbox.utils.language import validate_language_pair, LanguageError
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -110,6 +111,21 @@ class LiteLLMTranslator(ModelInterface):
         Returns:
             List of message dictionaries for the model
         """
+        # Build JSON output instructions based on whether glossary is enabled
+        if request.glossary:
+            json_instruction = (
+                "IMPORTANT: You MUST respond with a valid JSON object only, no markdown, no extra text. "
+                "The JSON must have exactly this structure:\n"
+                '{"translation": "<your translation here>", "glossary_extension": [{"term": "<source term>", "translation": "<target term>"}]}\n'
+                "The glossary_extension array can be empty if no new terms need to be added."
+            )
+        else:
+            json_instruction = (
+                "IMPORTANT: You MUST respond with a valid JSON object only, no markdown, no extra text. "
+                "The JSON must have exactly this structure:\n"
+                '{"translation": "<your translation here>"}'
+            )
+
         messages = [
             {
                 "role": "system",
@@ -120,9 +136,8 @@ class LiteLLMTranslator(ModelInterface):
                     f"Include ALL markup/formatting in the translation. But do not fix tags or formatting errors - "
                     f"you only receive chunks of text to translate and later chunks might contain the 'missing' tags. "
                     f"Translate only the content, do not add any explanations or notes. "
-                    f"Do not add any commentary or notes to the translation. It is extremely "
-                    f"important that the only output you give is the translation of the content. "
-                    f"IMPORTANT: Your translation should ALWAYS(!) be in '{request.target_lang}' language."
+                    f"IMPORTANT: Your translation should ALWAYS(!) be in '{request.target_lang}' language.\n\n"
+                    f"{json_instruction}"
                 ),
             }
         ]
@@ -153,8 +168,8 @@ class LiteLLMTranslator(ModelInterface):
                     "role": "user",
                     "content": (
                         f"[TRANSLATE_THIS]{request.content}[/TRANSLATE_THIS]\n\n"
-                        f"Only return the translation in '{request.target_lang}' language of the text between the [TRANSLATE_THIS]-tags (including ALL markup/formatting and line-breaks). "
-                        f"Do not include any other content. \n\nTranslation in '{request.target_lang}' language without commentary:"
+                        f"Translate the text between the [TRANSLATE_THIS]-tags to '{request.target_lang}' (preserve ALL markup/formatting and line-breaks). "
+                        f"Respond ONLY with the JSON object as instructed."
                     ),
                 }
             )
@@ -166,17 +181,13 @@ class LiteLLMTranslator(ModelInterface):
                     "content": [
                         {
                             "type": "text",
-                            "text": f"Translate the contents of the image from {request.source_lang} to {request.target_lang}",
+                            "text": f"Translate the contents of the image from {request.source_lang} to {request.target_lang}. Respond ONLY with the JSON object as instructed.",
                         },
                         {
                             "type": "image_url",
                             "image_url": {
                                 "url": f"data:image/png;base64,{base64.b64encode(request.content).decode()}"
                             },
-                        },
-                        {
-                            "type": "text",
-                            "text": f"Translation without commentary:",
                         },
                     ],
                 }
@@ -273,17 +284,11 @@ class LiteLLMTranslator(ModelInterface):
                 reasoning_effort=request.reasoning_effort,
             )
 
-            # Validate language codes (2 or 3 letter codes, or 'auto' for source)
-            if request.source_lang != "auto" and (not request.source_lang.isalpha() or len(request.source_lang) not in [
-                2,
-                3,
-            ]):
-                raise TranslationError("Translation failed: Invalid language code")
-            if not request.target_lang.isalpha() or len(request.target_lang) not in [
-                2,
-                3,
-            ]:
-                raise TranslationError("Translation failed: Invalid language code")
+            # Validate language codes using centralized validation
+            try:
+                validate_language_pair(request.source_lang, request.target_lang)
+            except LanguageError as e:
+                raise TranslationError(f"Translation failed: {e}") from e
 
             # Validate image content
             if request.content_type.startswith("image/"):

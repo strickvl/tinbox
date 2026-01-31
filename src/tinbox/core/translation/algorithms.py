@@ -173,7 +173,8 @@ async def translate_page_by_page(
     """
     total_tokens = 0
     total_cost = 0.0
-    translated_pages = []
+    # Use dict to track translations by actual page number (1-indexed)
+    translated_pages_by_num: dict[int, str] = {}
     task_id: Optional[TaskID] = None
     start_time = datetime.now()
 
@@ -189,11 +190,21 @@ async def translate_page_by_page(
         resume_result = await resume_from_checkpoint(checkpoint_manager, config)
         total_tokens = resume_result.total_tokens
         total_cost = resume_result.total_cost
-        
+
+        # Convert resumed list to dict (items are in order starting from page 1)
+        # The resume_result.metadata may contain the actual page->translation mapping
+        if resume_result.resumed and resume_result.metadata.get("translated_chunks"):
+            # Restore from checkpoint's translated_chunks which has page numbers as keys
+            translated_pages_by_num = {
+                int(k): v for k, v in resume_result.metadata["translated_chunks"].items()
+            }
+        elif resume_result.translated_items:
+            # Fallback: assume sequential from page 1
+            for i, text in enumerate(resume_result.translated_items, start=1):
+                translated_pages_by_num[i] = text
+
         if progress and task_id is not None and resume_result.resumed:
-            progress.update(task_id, completed=len(resume_result.translated_items), total_cost=total_cost)
-        
-        translated_pages = resume_result.translated_items
+            progress.update(task_id, completed=len(translated_pages_by_num), total_cost=total_cost)
 
         # Track failed pages
         failed_pages: list[int] = []
@@ -203,8 +214,11 @@ async def translate_page_by_page(
             glossary_manager.restore_from_checkpoint(resume_result.glossary_entries)
 
         # If everything already translated via checkpoint, short-circuit
-        if translated_pages and len(translated_pages) == len(content.pages):
-            final_text = "\n\n".join(translated_pages)
+        if len(translated_pages_by_num) == len(content.pages):
+            # Build final text in page order
+            final_text = "\n\n".join(
+                translated_pages_by_num[p] for p in sorted(translated_pages_by_num.keys())
+            )
             time_taken = (datetime.now() - start_time).total_seconds()
             return TranslationResponse(
                 text=final_text,
@@ -213,10 +227,12 @@ async def translate_page_by_page(
                 time_taken=time_taken,
             )
 
-        # Translate remaining pages
-        for i, page in enumerate(
-            content.pages[len(translated_pages) :], len(translated_pages)
-        ):
+        # Translate pages - iterate by actual page number (1-indexed)
+        for page_num, page in enumerate(content.pages, start=1):
+            # Skip already translated pages
+            if page_num in translated_pages_by_num:
+                continue
+
             try:
                 # Create translation request
                 request = TranslationRequest(
@@ -239,8 +255,9 @@ async def translate_page_by_page(
                 # Update glossary if new terms were discovered
                 if response.glossary_updates and glossary_manager:
                     glossary_manager.update_glossary(response.glossary_updates)
-                
-                translated_pages.append(response.text)
+
+                # Store with actual page number as key
+                translated_pages_by_num[page_num] = response.text
                 total_tokens += response.tokens_used
                 total_cost += response.cost
 
@@ -252,17 +269,15 @@ async def translate_page_by_page(
                 if (
                     checkpoint_manager
                     and config.checkpoint_dir
-                    and (i + 1) % config.checkpoint_frequency == 0
+                    and page_num % config.checkpoint_frequency == 0
                 ):
                     state = TranslationState(
                         source_lang=config.source_lang,
                         target_lang=config.target_lang,
                         algorithm="page",
-                        completed_pages=list(range(1, len(translated_pages) + 1)),
+                        completed_pages=sorted(translated_pages_by_num.keys()),
                         failed_pages=failed_pages,
-                        translated_chunks={
-                            i + 1: text for i, text in enumerate(translated_pages)
-                        },
+                        translated_chunks=translated_pages_by_num.copy(),
                         token_usage=total_tokens,
                         cost=total_cost,
                         time_taken=(datetime.now() - start_time).total_seconds(),
@@ -271,13 +286,13 @@ async def translate_page_by_page(
                     await checkpoint_manager.save(state)
 
             except Exception as e:
-                logger.error(f"Failed to translate page {i + 1}: {str(e)}")
-                failed_pages.append(i + 1)
+                logger.error(f"Failed to translate page {page_num}: {str(e)}")
+                failed_pages.append(page_num)
 
             if config.max_cost and total_cost > config.max_cost:
                 raise TranslationError(f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}")
 
-        if not translated_pages:
+        if not translated_pages_by_num:
             if failed_pages:
                 raise TranslationError(
                     f"Translation failed: No pages were successfully translated. Failed pages: {failed_pages}"
@@ -290,8 +305,10 @@ async def translate_page_by_page(
         if failed_pages:
             logger.warning(f"Failed pages: {failed_pages}")
 
-        # Join pages with double newlines
-        final_text = "\n\n".join(translated_pages)
+        # Join pages in order (omitting failed pages)
+        final_text = "\n\n".join(
+            translated_pages_by_num[p] for p in sorted(translated_pages_by_num.keys())
+        )
 
         time_taken = (datetime.now() - start_time).total_seconds()
 
@@ -304,96 +321,6 @@ async def translate_page_by_page(
 
     except Exception as e:
         raise TranslationError(f"Translation failed: {str(e)}") from e
-
-
-# TODO: This seems to be used nowhere… consider removing.
-# ------------------------------------------------------------
-async def repair_seams(
-    pages: list[str],
-    config: TranslationConfig,
-    translator: ModelInterface,
-) -> str:
-    """Repair seams between translated pages.
-
-    Args:
-        pages: List of translated pages
-        config: Translation configuration
-        translator: Model interface for translation
-
-    Returns:
-        Combined text with repaired seams
-
-    Raises:
-        TranslationError: If seam repair fails
-    """
-    if len(pages) <= 1:
-        return pages[0] if pages else ""
-
-    try:
-        result = [pages[0]]
-        for i in range(1, len(pages)):
-            # Extract overlapping content
-            seam = extract_seam(result[-1], pages[i], config.page_seam_overlap)
-            if seam:
-                # Update page with repaired seam
-                result.append(update_page_with_seam(pages[i], seam))
-            else:
-                result.append(pages[i])
-
-        return "\n\n".join(result)
-
-    except Exception as e:
-        raise TranslationError(f"Failed to repair seams: {str(e)}") from e
-
-
-def extract_seam(text1: str, text2: str, overlap_size: int) -> str:
-    """Extract overlapping content between two texts.
-
-    Args:
-        text1: First text
-        text2: Second text
-        overlap_size: Size of overlap to look for
-
-    Returns:
-        Overlapping content or empty string if no overlap found
-    """
-    if not text1 or not text2 or overlap_size <= 0:
-        return ""
-
-    # Get end of first text
-    end1 = text1[-overlap_size:]
-    if not end1:
-        return ""
-
-    # Look for overlap in second text
-    start_pos = text2.find(end1)
-    if start_pos >= 0:
-        return text2[start_pos : start_pos + overlap_size]
-
-    return ""
-
-
-def update_page_with_seam(page: str, seam: str) -> str:
-    """Update page text with repaired seam.
-
-    Args:
-        page: Page text
-        seam: Seam content
-
-    Returns:
-        Updated page text
-    """
-    if not seam:
-        return page
-
-    # Find seam position
-    pos = page.find(seam)
-    if pos >= 0:
-        # Keep text after seam
-        return page[pos + len(seam) :]
-
-    return page
-# ------------------------------------------------------------
 
 
 async def translate_sliding_window(

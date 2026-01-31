@@ -218,7 +218,7 @@ def should_resume(config: TranslationConfig) -> bool:
     )
 
 
-def load_checkpoint(config: TranslationConfig) -> Optional[TranslationState]:
+async def load_checkpoint(config: TranslationConfig) -> Optional[TranslationState]:
     """Load translation state from checkpoint.
 
     Args:
@@ -231,7 +231,7 @@ def load_checkpoint(config: TranslationConfig) -> Optional[TranslationState]:
         return None
 
     manager = CheckpointManager(config)
-    return manager.load()
+    return await manager.load()
 
 
 async def resume_from_checkpoint(
@@ -284,15 +284,18 @@ async def resume_from_checkpoint(
     ]
     
     # Prepare algorithm-specific metadata
-    metadata = {}
-    
+    metadata = {
+        # Include translated_chunks for algorithms that need page-number mapping
+        "translated_chunks": checkpoint.translated_chunks,
+    }
+
     # For context-aware algorithm, set up context from the last completed chunk
     if config.algorithm == "context-aware" and chunks and translated_items:
         chunk_index = len(translated_items) - 1
         if chunk_index < len(chunks):
             metadata["previous_chunk"] = chunks[chunk_index]
             metadata["previous_translation"] = translated_items[-1]
-    
+
     result = ResumeResult(
         resumed=True,
         translated_items=translated_items,

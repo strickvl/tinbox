@@ -447,6 +447,75 @@ def test_cli_context_aware_default(cli_runner, tmp_path):
         assert call_args.kwargs["algorithm"] == "context-aware"
 
 
+def test_pdf_auto_selects_page_algorithm(cli_runner, tmp_path):
+    """Test that PDF files automatically use 'page' algorithm."""
+    input_file = tmp_path / "test.pdf"
+    input_file.write_bytes(b"%PDF-1.4 test")  # Minimal PDF-like content
+
+    with patch("tinbox.cli.estimate_cost") as mock_estimate, \
+         patch("tinbox.cli.load_document") as mock_load, \
+         patch("tinbox.cli.create_translator") as mock_translator, \
+         patch("tinbox.cli.translate_document") as mock_translate, \
+         patch("tinbox.cli.console"):
+
+        # Setup mocks
+        mock_estimate.return_value = CostEstimate(
+            estimated_tokens=100,
+            estimated_cost=0.01,
+            estimated_time=10.0,
+            warnings=[]
+        )
+        mock_load.return_value = DocumentContent(
+            pages=[b"image bytes"],  # PDF returns bytes
+            content_type="image/png",
+            metadata={}
+        )
+        mock_translate.return_value = TranslationResponse(
+            text="Translated text",
+            tokens_used=100,
+            cost=0.01,
+            time_taken=5.0
+        )
+
+        # Don't specify algorithm - should auto-select 'page' for PDF
+        result = cli_runner.invoke(app, [
+            "translate",
+            str(input_file),
+            "--model", "openai:gpt-4o",
+            "--force",
+        ])
+
+        assert result.exit_code == 0
+
+        # Verify 'page' algorithm was used for PDF
+        mock_estimate.assert_called_once()
+        call_args = mock_estimate.call_args
+        assert call_args.kwargs["algorithm"] == "page"
+
+
+def test_pdf_rejects_context_aware_algorithm(cli_runner, tmp_path):
+    """Test that PDF files reject non-page algorithms with clear error."""
+    input_file = tmp_path / "test.pdf"
+    input_file.write_bytes(b"%PDF-1.4 test")
+
+    with patch("tinbox.cli.console") as mock_console:
+        # Explicitly specify context-aware for PDF - should fail
+        result = cli_runner.invoke(app, [
+            "translate",
+            str(input_file),
+            "--model", "openai:gpt-4o",
+            "--algorithm", "context-aware",
+        ])
+
+        assert result.exit_code == 1
+        # Verify the error message was printed via console
+        mock_console.print.assert_called()
+        # Get the error message from the first call
+        error_call = mock_console.print.call_args_list[0]
+        error_message = str(error_call)
+        assert "PDF files only support the 'page' algorithm" in error_message
+
+
 def test_translate_reasoning_effort_default(cli_runner, tmp_path):
     """Test that reasoning_effort defaults to minimal."""
     input_file = tmp_path / "test.txt"

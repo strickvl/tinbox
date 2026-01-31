@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import AsyncIterator, Union
 
 import pypdf
-from pdf2image import convert_from_path
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
@@ -17,6 +16,23 @@ from tinbox.core.processor import (
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _get_convert_from_path():
+    """Lazily import pdf2image.convert_from_path with helpful error message."""
+    try:
+        from pdf2image import convert_from_path
+        return convert_from_path
+    except ImportError:
+        raise ProcessingError(
+            "pdf2image is not installed. PDF image conversion requires the PDF extras.\n\n"
+            "To install with PDF support, run:\n"
+            "  pip install tinbox[pdf]\n"
+            "or:\n"
+            "  uv pip install tinbox[pdf]\n\n"
+            "For full installation with all extras:\n"
+            "  pip install tinbox[all]"
+        )
 
 
 def _check_poppler_available() -> None:
@@ -136,7 +152,8 @@ class PdfProcessor(BaseDocumentProcessor):
                 if end_page > total_pages:
                     end_page = total_pages
 
-            # Convert pages to images
+            # Convert pages to images (lazy import for optional dependency)
+            convert_from_path = _get_convert_from_path()
             pages = convert_from_path(
                 file_path,
                 first_page=start_page,
