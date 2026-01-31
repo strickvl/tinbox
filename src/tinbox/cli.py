@@ -29,6 +29,8 @@ from tinbox.core.output import (
     TranslationOutput,
     create_handler,
 )
+from tinbox.core.doctor import run_doctor_checks
+from tinbox.utils.language import validate_language_pair, LanguageError
 from tinbox.utils.logging import configure_logging, get_logger
 from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn
 
@@ -231,9 +233,24 @@ def translate(
         "--reasoning-effort",
         help="Model reasoning effort level (minimal, low, medium, high). Higher levels improve quality but increase cost and time significantly.",
     ),
+    pdf_dpi: int = typer.Option(
+        200,
+        "--pdf-dpi",
+        help="DPI for PDF rasterization (PDF files only). Higher values = better quality but more tokens. Default: 200.",
+    ),
 ) -> None:
     """Translate a document using LLMs."""
     try:
+        # Validate and normalize language codes early (before cost estimation)
+        try:
+            effective_source = source_lang or "auto"
+            effective_source, effective_target = validate_language_pair(
+                effective_source, target_lang
+            )
+        except LanguageError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
         # Validate reasoning effort parameter
         valid_reasoning_efforts = ["minimal", "low", "medium", "high"]
         if reasoning_effort not in valid_reasoning_efforts:
@@ -291,10 +308,10 @@ def translate(
                 console.print("\nTranslation cancelled.")
                 raise typer.Exit(1)
 
-        # Create translation config
+        # Create translation config (use normalized language codes)
         config = TranslationConfig(
-            source_lang=source_lang or "auto",
-            target_lang=target_lang,
+            source_lang=effective_source,
+            target_lang=effective_target,
             model=model_type,
             model_name=model_name,
             algorithm=effective_algorithm,
@@ -311,8 +328,9 @@ def translate(
             reasoning_effort=reasoning_effort,
         )
 
-        # Load document
-        content = asyncio.run(load_document(input_file))
+        # Load document (pass DPI setting for PDF files)
+        processor_settings = {"dpi": pdf_dpi} if file_type == FileType.PDF else None
+        content = asyncio.run(load_document(input_file, processor_settings=processor_settings))
 
         # Initialize model interface
         translator = create_translator(config)
@@ -354,13 +372,25 @@ def translate(
                 )
             )
 
-            # Convert TranslationResponse to TranslationResult
+            # Convert TranslationResponse to TranslationResult (including failure info)
             result = TranslationResult(
                 text=response.text,
                 tokens_used=response.tokens_used,
                 cost=response.cost,
                 time_taken=response.time_taken,
+                failed_pages=response.failed_pages,
+                page_errors=response.page_errors,
+                warnings=response.warnings,
             )
+
+        # Combine warnings from estimate and translation
+        all_warnings = estimate.warnings + response.warnings
+
+        # Build error messages from failed pages
+        errors = [
+            f"Failed to translate page {p}: {response.page_errors.get(p, 'Unknown error')}"
+            for p in response.failed_pages
+        ]
 
         # Create translation output with metadata
         output = TranslationOutput(
@@ -373,7 +403,8 @@ def translate(
                 input_file_type=file_type,
             ),
             result=result,
-            warnings=estimate.warnings,
+            warnings=all_warnings,
+            errors=errors,
         )
 
         # Get appropriate output handler
@@ -405,6 +436,68 @@ def translate(
         logger.exception("Translation failed")
         console.print(f"[red]Error: {str(e)}[/red]")
         sys.exit(1)
+
+
+@app.command()
+def doctor(
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output report as JSON.",
+    ),
+) -> None:
+    """Check Tinbox setup and diagnose common issues.
+
+    Runs diagnostic checks for:
+    - System tools (poppler for PDF processing)
+    - Python packages (pdf2image, python-docx, pillow)
+    - API keys (OpenAI, Anthropic, Google)
+    - Local model support (Ollama)
+    """
+    report = run_doctor_checks()
+
+    if json_output:
+        console.print(report.model_dump_json(indent=2))
+        return
+
+    # Group checks by category
+    categories: dict[str, list] = {}
+    for check in report.checks:
+        if check.category not in categories:
+            categories[check.category] = []
+        categories[check.category].append(check)
+
+    console.print("\n[bold]Tinbox Diagnostic Report[/bold]\n")
+
+    for category, checks in categories.items():
+        table = Table(title=category, show_header=True)
+        table.add_column("Check", style="cyan")
+        table.add_column("Status")
+        table.add_column("Details")
+
+        for check in checks:
+            status = "[green]OK[/green]" if check.ok else "[red]MISSING[/red]"
+            details = check.details or ""
+            if not check.ok and check.hint:
+                details = f"{details}\n[dim]{check.hint}[/dim]"
+            table.add_row(check.name, status, details)
+
+        console.print(table)
+        console.print()
+
+    # Summary
+    if report.all_ok:
+        console.print("[green]All checks passed![/green] Tinbox is ready to use.\n")
+    elif report.required_ok:
+        console.print(
+            "[yellow]Core checks passed.[/yellow] Some optional features may be unavailable.\n"
+            "Set API keys for cloud models or install Ollama for local models.\n"
+        )
+    else:
+        console.print(
+            "[red]Some required checks failed.[/red] Please fix the issues above.\n"
+        )
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

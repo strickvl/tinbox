@@ -1,6 +1,6 @@
 """Translation interface definitions."""
 
-from typing import Optional, Protocol, Union, List, Literal
+from typing import Optional, Protocol, Union, List, Literal, Dict
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -38,7 +38,7 @@ class TranslationRequest(BaseModel):
 
 
 class TranslationResponse(BaseModel):
-    """Response from a translation request."""
+    """Response from a translation request (also used as aggregate response from algorithms)."""
 
     text: str
     tokens_used: int = Field(ge=0)
@@ -47,6 +47,19 @@ class TranslationResponse(BaseModel):
     glossary_updates: List[GlossaryEntry] = Field(
         default_factory=list,
         description="New glossary entries discovered during this translation",
+    )
+    # Aggregate response fields (populated by algorithms, not individual translations)
+    failed_pages: List[int] = Field(
+        default_factory=list,
+        description="List of page numbers that failed to translate",
+    )
+    page_errors: Dict[int, str] = Field(
+        default_factory=dict,
+        description="Mapping from page number to error message",
+    )
+    warnings: List[str] = Field(
+        default_factory=list,
+        description="Non-fatal warnings during translation",
     )
 
     model_config = ConfigDict(frozen=True)

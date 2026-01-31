@@ -124,6 +124,20 @@ class TranslationResult(BaseModel):
     cost: float = Field(ge=0.0)
     time_taken: float = Field(ge=0.0)
 
+    # Failed page tracking (for page-by-page algorithm)
+    failed_pages: List[int] = Field(
+        default_factory=list,
+        description="List of page numbers that failed to translate",
+    )
+    page_errors: Dict[int, str] = Field(
+        default_factory=dict,
+        description="Mapping from page number to error message",
+    )
+    warnings: List[str] = Field(
+        default_factory=list,
+        description="Non-fatal warnings during translation",
+    )
+
     model_config = ConfigDict(frozen=True)
 
 

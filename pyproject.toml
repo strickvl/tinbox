@@ -25,7 +25,6 @@ dependencies = [
     "rich>=13.7.0",
     "pydantic>=2.8.0,<3.0.0",
     "litellm>=1.77.3",
-    "asyncio>=3.4.3",
     "structlog>=24.1.0",
     "pypdf>=5.3.0",
     "python-docx>=1.1.2",

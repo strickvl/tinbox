@@ -206,8 +206,9 @@ async def translate_page_by_page(
         if progress and task_id is not None and resume_result.resumed:
             progress.update(task_id, completed=len(translated_pages_by_num), total_cost=total_cost)
 
-        # Track failed pages
+        # Track failed pages with their error messages
         failed_pages: list[int] = []
+        page_errors: dict[int, str] = {}
 
         # Restore glossary state from checkpoint if enabled
         if config.use_glossary and glossary_manager and resume_result.glossary_entries:
@@ -286,8 +287,10 @@ async def translate_page_by_page(
                     await checkpoint_manager.save(state)
 
             except Exception as e:
-                logger.error(f"Failed to translate page {page_num}: {str(e)}")
+                error_msg = str(e)
+                logger.error(f"Failed to translate page {page_num}: {error_msg}")
                 failed_pages.append(page_num)
+                page_errors[page_num] = error_msg
 
             if config.max_cost and total_cost > config.max_cost:
                 raise TranslationError(f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}")
@@ -302,13 +305,32 @@ async def translate_page_by_page(
                     f"Translation failed: No pages were successfully translated"
                 )
 
+        # Build warnings list
+        warnings: list[str] = []
         if failed_pages:
             logger.warning(f"Failed pages: {failed_pages}")
+            warnings.append(
+                f"Translation incomplete: {len(failed_pages)} page(s) failed to translate "
+                f"(pages: {', '.join(map(str, sorted(failed_pages)))})"
+            )
 
-        # Join pages in order (omitting failed pages)
-        final_text = "\n\n".join(
-            translated_pages_by_num[p] for p in sorted(translated_pages_by_num.keys())
-        )
+        # Build final text with placeholders for failed pages
+        # This ensures output has content for ALL pages, making failures visible
+        all_page_nums = list(range(1, len(content.pages) + 1))
+        page_texts = []
+        for p in all_page_nums:
+            if p in translated_pages_by_num:
+                page_texts.append(translated_pages_by_num[p])
+            elif p in page_errors:
+                # Insert placeholder for failed page
+                placeholder = (
+                    f"[TRANSLATION_FAILED: Page {p}]\n"
+                    f"Reason: {page_errors[p]}\n"
+                    f"[/TRANSLATION_FAILED]"
+                )
+                page_texts.append(placeholder)
+
+        final_text = "\n\n".join(page_texts)
 
         time_taken = (datetime.now() - start_time).total_seconds()
 
@@ -317,6 +339,9 @@ async def translate_page_by_page(
             tokens_used=total_tokens,
             cost=total_cost,
             time_taken=time_taken,
+            failed_pages=failed_pages,
+            page_errors=page_errors,
+            warnings=warnings,
         )
 
     except Exception as e:

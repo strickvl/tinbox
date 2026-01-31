@@ -151,11 +151,16 @@ class ProcessingError(Exception):
     pass
 
 
-def get_processor_for_file_type(file_type: FileType) -> DocumentProcessor:
+def get_processor_for_file_type(
+    file_type: FileType,
+    *,
+    settings: dict[str, Any] | None = None,
+) -> DocumentProcessor:
     """Get the appropriate processor for a file type.
 
     Args:
         file_type: File type to get processor for
+        settings: Optional settings dict passed to processor (e.g., {"dpi": 300} for PDF)
 
     Returns:
         Document processor instance
@@ -166,7 +171,7 @@ def get_processor_for_file_type(file_type: FileType) -> DocumentProcessor:
     # Import processors lazily to avoid loading unnecessary dependencies
     if file_type == FileType.PDF:
         from tinbox.core.processor.pdf import PdfProcessor
-        return PdfProcessor()
+        return PdfProcessor(settings=settings)
     elif file_type == FileType.DOCX:
         from tinbox.core.processor.docx import WordProcessor as DocxProcessor
         return DocxProcessor()
@@ -177,11 +182,16 @@ def get_processor_for_file_type(file_type: FileType) -> DocumentProcessor:
         raise ProcessingError(f"No processor available for file type: {file_type}")
 
 
-async def load_document(file_path: Path) -> DocumentContent:
+async def load_document(
+    file_path: Path,
+    *,
+    processor_settings: dict[str, Any] | None = None,
+) -> DocumentContent:
     """Load a document and prepare it for translation.
 
     Args:
         file_path: Path to the document to load
+        processor_settings: Optional settings passed to the processor (e.g., {"dpi": 300} for PDFs)
 
     Returns:
         Document content ready for translation
@@ -191,7 +201,7 @@ async def load_document(file_path: Path) -> DocumentContent:
     """
     try:
         file_type = FileType(file_path.suffix.lstrip(".").lower())
-        processor = get_processor_for_file_type(file_type)
+        processor = get_processor_for_file_type(file_type, settings=processor_settings)
 
         # Get metadata first
         metadata = await processor.get_metadata(file_path)

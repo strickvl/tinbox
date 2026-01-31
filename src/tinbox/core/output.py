@@ -89,7 +89,7 @@ class JSONOutputHandler:
         json_str = json.dumps(data, indent=2)
 
         if file:
-            file.write_text(json_str)
+            file.write_text(json_str, encoding="utf-8")
         else:
             print(json_str)
 
@@ -110,7 +110,7 @@ class TextOutputHandler:
         """
         # Just write the translated text
         if file:
-            file.write_text(output.result.text)
+            file.write_text(output.result.text, encoding="utf-8")
         else:
             print(output.result.text)
 
@@ -182,7 +182,7 @@ class MarkdownOutputHandler:
         md_content = "\n".join(md_lines)
 
         if file:
-            file.write_text(md_content)
+            file.write_text(md_content, encoding="utf-8")
         else:
             print(md_content)
 

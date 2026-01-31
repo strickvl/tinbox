@@ -1,5 +1,6 @@
 """Cost estimation utilities."""
 
+import math
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional
@@ -129,7 +130,7 @@ def estimate_context_aware_tokens(
     Returns:
         Estimated input tokens including context overhead
     """
-    return int(estimated_tokens * context_multiplier)
+    return math.ceil(estimated_tokens * context_multiplier)
 
 
 def estimate_cost(
@@ -168,12 +169,12 @@ def estimate_cost(
     
     # Add general prompt overhead (system prompt, etc.):
     prompt_factor = 0.03
-    input_tokens += input_tokens * prompt_factor
-    
+    input_tokens = math.ceil(input_tokens * (1 + prompt_factor))
+
     # Add glossary overhead: assume a 20% overhead as per testing
     glossary_factor = 0.20
     if use_glossary:
-        glossary_overhead_tokens = (input_tokens + output_tokens) * glossary_factor
+        glossary_overhead_tokens = math.ceil((input_tokens + output_tokens) * glossary_factor)
         input_tokens += glossary_overhead_tokens
 
     input_cost = (input_tokens / 1000) * input_cost_per_1k
@@ -201,7 +202,7 @@ def estimate_cost(
             context_overhead = input_tokens - estimated_tokens
             warnings.append(
                 f"Context-aware algorithm uses additional input tokens for context "
-                f"(+{context_overhead:,.0f} tokens, ~{context_overhead / estimated_tokens * 100:.0f}% overhead). "
+                f"(+{context_overhead:,} tokens, ~{context_overhead * 100 // estimated_tokens}% overhead). "
                 f"This improves translation quality but increases cost."
             )
 

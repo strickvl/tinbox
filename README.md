@@ -24,7 +24,7 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 
 ## ✨ Key Features
 
-- **🔍 No OCR Needed**: Directly translates PDFs using advanced multimodal models
+- **🔍 No OCR Needed**: Directly translates PDFs using vision-capable multimodal models (GPT-4o, Claude Sonnet, Gemini Pro, etc.)
 - **📄 Smart Document Handling**: Supports PDFs, Word documents, and text files
 - **📏 Large Document Handling**: Efficiently processes large PDFs and other document types
 - **📌 Overcomes Model Limitations**: Bypasses common model refusals due to size or copyright concerns.
@@ -64,7 +64,7 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 
 ### 📄 Smart Document Handling
 
-- **PDFs**: Processed directly as images - no OCR needed!
+- **PDFs**: Processed directly as images - no OCR needed! ⚠️ **Requires a vision-capable model** (GPT-4o, Claude Sonnet, Gemini Pro Vision). Text-only models will fail on PDFs.
 - **Word (docx)**: Preserves formatting while translating
 - **Text files**: Efficient processing for large files
 
@@ -182,11 +182,12 @@ tinbox translate --to es --reasoning-effort low --max-cost 10.00 --model openai:
 | ---------------- | ------------------------ | ----------------------------------------------------------------- | --------------- |
 | **Core**         | `--from, -f`             | Source language (auto-detect if not specified)                    | Auto-detect     |
 |                  | `--to, -t`               | Target language                                                   | English         |
-|                  | `--model`                | Model to use (`openai:gpt-4o`, `anthropic:claude-3-sonnet`, etc.) | Auto-select     |
+|                  | `--model`                | Model to use (`openai:gpt-4o`, `anthropic:claude-3-sonnet`, etc.) | **Required**    |
 |                  | `--output, -o`           | Output file (default: print to console)                           | Console         |
-| **Algorithms**   | `--algorithm, -a`        | Translation algorithm (`context-aware`, `page`, `sliding-window`) | `context-aware` |
+| **Algorithms**   | `--algorithm, -a`        | Translation algorithm (`context-aware`, `page`, `sliding-window`) | Auto-select     |
 |                  | `--context-size`         | Target chunk size for context-aware algorithm                     | 2000 chars      |
 |                  | `--split-token`          | Custom token to split text on                                     | None            |
+| **PDF**          | `--pdf-dpi`              | DPI for PDF rasterization (higher = better quality, more tokens)  | 200             |
 | **Checkpoints**  | `--checkpoint-dir`       | Directory to store checkpoints for resuming                       | None            |
 |                  | `--checkpoint-frequency` | Save checkpoint every N pages/chunks                              | 1               |
 | **Glossary**     | `--glossary`             | Enable glossary for consistent terminology                        | Disabled        |
@@ -194,7 +195,6 @@ tinbox translate --to es --reasoning-effort low --max-cost 10.00 --model openai:
 |                  | `--save-glossary`        | Path to save updated glossary                                     | None            |
 | **Quality**      | `--reasoning-effort`     | Model reasoning level (`minimal`, `low`, `medium`, `high`)        | `minimal`       |
 | **Output**       | `--format, -F`           | Output format (`text`, `json`, `markdown`)                        | `text`          |
-|                  | `--benchmark, -b`        | Include performance metrics                                       | Disabled        |
 | **Cost Control** | `--dry-run`              | Preview costs without translating                                 | Disabled        |
 |                  | `--max-cost`             | Maximum cost limit (USD)                                          | No limit        |
 
@@ -214,7 +214,7 @@ tinbox translate --to es --context-size 1500 --model openai:gpt-5-2025-08-07 doc
 tinbox translate --to es --algorithm page --model openai:gpt-5-2025-08-07 document.pdf
 
 # Sliding window (not recommended, use context-aware instead)
-tinbox translate --to es --algorithm sliding-window --window-size 3000 --model openai:gpt-5-2025-08-07 large_file.txt
+tinbox translate --to es --algorithm sliding-window --model openai:gpt-5-2025-08-07 large_file.txt
 
 # Custom splitting for structured documents
 tinbox translate --to fr --split-token "---" --model openai:gpt-5-2025-08-07 structured_document.txt
@@ -272,7 +272,7 @@ Glossary files use JSON format for easy editing and sharing:
 
 ```bash
 # JSON with metadata and costs
-tinbox translate --to es --format json --benchmark --model openai:gpt-4o document.pdf
+tinbox translate --to es --format json --model openai:gpt-4o document.pdf
 
 # Markdown report
 tinbox translate --to es --format markdown --model openai:gpt-4o document.pdf
@@ -280,6 +280,30 @@ tinbox translate --to es --format markdown --model openai:gpt-4o document.pdf
 # Save to file
 tinbox translate --to es --output translated.txt --model openai:gpt-4o document.pdf
 ```
+
+---
+
+## 🔧 Troubleshooting
+
+Run `tinbox doctor` to diagnose common setup issues:
+
+```bash
+tinbox doctor
+```
+
+This checks:
+- ✅ Required system tools (poppler for PDFs)
+- ✅ Optional Python dependencies (pdf2image, python-docx)
+- ✅ API key configuration
+
+**Common Issues:**
+
+| Problem | Solution |
+|---------|----------|
+| PDF translation fails | 1. Install poppler (`brew install poppler` on macOS) 2. Use a vision-capable model (GPT-4o, Claude Sonnet, Gemini Pro) |
+| "No module named pdf2image" | Install PDF extras: `pip install tinbox[pdf]` |
+| API key not found | Set environment variable: `export OPENAI_API_KEY="..."` |
+| Translation times out | Try a smaller `--context-size` or use `--checkpoint-dir` for resumable translations |
 
 ---
 
