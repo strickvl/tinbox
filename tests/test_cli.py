@@ -174,7 +174,7 @@ def test_translate_with_warnings(cli_runner):
     try:
         with (
             patch("tinbox.cli.estimate_cost", return_value=estimate),
-            patch("tinbox.cli.console.print") as mock_print,
+            patch("tinbox.cli.console") as mock_console,
             patch("typer.confirm", return_value=False),
         ):
             result = cli_runner.invoke(
@@ -190,7 +190,7 @@ def test_translate_with_warnings(cli_runner):
             )
             assert result.exit_code == 1
             # Check if the cancellation message was printed
-            mock_print.assert_any_call("\nTranslation cancelled.")
+            mock_console.print.assert_any_call("\nTranslation cancelled.")
 
     finally:
         test_file.unlink()
@@ -375,7 +375,7 @@ def test_translate_max_cost(cli_runner):
     try:
         with (
             patch("tinbox.cli.estimate_cost", return_value=estimate),
-            patch("tinbox.cli.console.print") as mock_print,
+            patch("tinbox.cli.console") as mock_console,
             patch("typer.confirm", return_value=False),
         ):
             result = cli_runner.invoke(
@@ -393,7 +393,7 @@ def test_translate_max_cost(cli_runner):
             )
             assert result.exit_code == 1
             # Check if the cancellation message was printed
-            mock_print.assert_any_call("\nTranslation cancelled.")
+            mock_console.print.assert_any_call("\nTranslation cancelled.")
 
     finally:
         test_file.unlink()
