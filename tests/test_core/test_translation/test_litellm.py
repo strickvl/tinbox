@@ -319,7 +319,7 @@ async def test_invalid_language_codes(translator: LiteLLMTranslator, mock_comple
     )
 
     with pytest.raises(
-        TranslationError, match="Translation failed.*Unsupported language code"
+        TranslationError, match=r"Translation failed.*Unsupported language code"
     ):
         await translator.translate(request)
 
@@ -335,7 +335,7 @@ async def test_invalid_language_codes(translator: LiteLLMTranslator, mock_comple
     )
 
     with pytest.raises(
-        TranslationError, match="Translation failed.*Unsupported language code"
+        TranslationError, match=r"Translation failed.*Unsupported language code"
     ):
         await translator.translate(request)
 
