@@ -1,8 +1,8 @@
 """Word document processor implementation."""
 
-import re
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Union
+from typing import Union
 from zipfile import BadZipFile
 
 from docx import Document
@@ -10,7 +10,6 @@ from docx.opc.exceptions import PackageNotFoundError
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
-    DocumentContent,
     DocumentMetadata,
     ProcessingError,
 )
@@ -124,11 +123,9 @@ class WordProcessor(BaseDocumentProcessor):
             )
 
         except (PackageNotFoundError, BadZipFile) as e:
-            raise ProcessingError(
-                f"Invalid or corrupted Word document: {str(e)}"
-            ) from e
+            raise ProcessingError(f"Invalid or corrupted Word document: {e!s}") from e
         except Exception as e:
-            raise ProcessingError(f"Failed to extract Word metadata: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract Word metadata: {e!s}") from e
 
     async def extract_content(
         self,
@@ -165,8 +162,6 @@ class WordProcessor(BaseDocumentProcessor):
             yield text
 
         except (PackageNotFoundError, BadZipFile) as e:
-            raise ProcessingError(
-                f"Invalid or corrupted Word document: {str(e)}"
-            ) from e
+            raise ProcessingError(f"Invalid or corrupted Word document: {e!s}") from e
         except Exception as e:
-            raise ProcessingError(f"Failed to extract Word content: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract Word content: {e!s}") from e

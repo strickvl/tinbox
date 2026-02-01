@@ -1,11 +1,5 @@
 """Core functionality for Tinbox."""
 
-from tinbox.core.types import (
-    FileType,
-    ModelType,
-    TranslationConfig,
-    TranslationResult,
-)
 from tinbox.core.processor import DocumentContent, load_document
 from tinbox.core.translation import (
     ModelInterface,
@@ -14,13 +8,19 @@ from tinbox.core.translation import (
     create_translator,
 )
 from tinbox.core.translation.algorithms import translate_document
+from tinbox.core.types import (
+    FileType,
+    ModelType,
+    TranslationConfig,
+    TranslationResult,
+)
 
 __all__ = [
+    "DocumentContent",
     "FileType",
     "ModelType",
     "TranslationConfig",
     "TranslationResult",
-    "DocumentContent",
     "load_document",
     "translate_document",
 ]

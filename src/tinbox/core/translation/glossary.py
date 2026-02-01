@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 from tinbox.core.types import Glossary, GlossaryEntry
 from tinbox.utils.logging import get_logger
@@ -14,13 +14,15 @@ class GlossaryManager:
     """Manages glossary state and persistence during translation."""
 
     def __init__(self, initial_glossary: Optional[Glossary] = None) -> None:
-        self.current_glossary: Glossary = initial_glossary if initial_glossary is not None else Glossary()
+        self.current_glossary: Glossary = (
+            initial_glossary if initial_glossary is not None else Glossary()
+        )
 
     def get_current_glossary(self) -> Glossary:
         """Get the current glossary state."""
         return self.current_glossary
 
-    def update_glossary(self, new_entries: List[GlossaryEntry]) -> None:
+    def update_glossary(self, new_entries: list[GlossaryEntry]) -> None:
         """Update the current glossary with new entries."""
         if not new_entries:
             return
@@ -55,12 +57,14 @@ class GlossaryManager:
                 logger.warning("Glossary file does not exist", path=str(file_path))
                 return GlossaryManager()
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
 
             entries_dict = data.get("entries", {})
             if not isinstance(entries_dict, dict):
-                raise ValueError("Invalid glossary file format: 'entries' must be an object mapping terms to translations")
+                raise ValueError(
+                    "Invalid glossary file format: 'entries' must be an object mapping terms to translations"
+                )
 
             glossary = Glossary(entries=entries_dict)
             manager = GlossaryManager(initial_glossary=glossary)
@@ -83,5 +87,3 @@ class GlossaryManager:
                 "Restored glossary from checkpoint",
                 terms=len(glossary_entries),
             )
-
-

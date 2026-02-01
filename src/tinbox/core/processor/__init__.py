@@ -1,10 +1,11 @@
 """Package initialization for document processors."""
 
-from pathlib import Path
-from typing import Any, AsyncIterator, Protocol, Union, List, Dict, Type
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Any, Protocol, Union
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tinbox.core.types import FileType
 from tinbox.utils.logging import get_logger
@@ -15,7 +16,7 @@ logger = get_logger(__name__)
 class DocumentContent(BaseModel):
     """Represents a document ready for translation."""
 
-    pages: List[Union[str, bytes]]  # Individual pages for translation
+    pages: list[Union[str, bytes]]  # Individual pages for translation
     content_type: str = Field(pattern=r"^(text|image)/.+$")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -24,8 +25,8 @@ class DocumentContent(BaseModel):
     @field_validator("pages")
     @classmethod
     def validate_pages_not_empty(
-        cls, v: List[Union[str, bytes]]
-    ) -> List[Union[str, bytes]]:
+        cls, v: list[Union[str, bytes]]
+    ) -> list[Union[str, bytes]]:
         """Validate that pages list is not empty."""
         if not v:
             raise ValueError("Pages cannot be empty")
@@ -171,12 +172,15 @@ def get_processor_for_file_type(
     # Import processors lazily to avoid loading unnecessary dependencies
     if file_type == FileType.PDF:
         from tinbox.core.processor.pdf import PdfProcessor
+
         return PdfProcessor(settings=settings)
     elif file_type == FileType.DOCX:
         from tinbox.core.processor.docx import WordProcessor as DocxProcessor
+
         return DocxProcessor()
     elif file_type == FileType.TXT:
         from tinbox.core.processor.text import TextProcessor
+
         return TextProcessor()
     else:
         raise ProcessingError(f"No processor available for file type: {file_type}")
@@ -221,16 +225,16 @@ async def load_document(
         )
 
     except Exception as e:
-        raise ProcessingError(f"Failed to load document: {str(e)}") from e
+        raise ProcessingError(f"Failed to load document: {e!s}") from e
 
 
 __all__ = [
+    "BaseDocumentProcessor",
     "DocumentContent",
     "DocumentMetadata",
     "DocumentProcessor",
-    "BaseDocumentProcessor",
-    "ProcessingError",
     "FileType",
+    "ProcessingError",
     "get_processor_for_file_type",
     "load_document",
 ]

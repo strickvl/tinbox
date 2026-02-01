@@ -1,6 +1,5 @@
 """Tests for the CLI interface."""
 
-import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,9 +10,9 @@ from typer.testing import CliRunner
 from tinbox.cli import app
 from tinbox.core.cost import CostEstimate
 from tinbox.core.processor import DocumentContent
-from tinbox.core.types import FileType, ModelType, TranslationResult, TranslationConfig
-from tinbox.core.translation.interface import ModelInterface, TranslationResponse
 from tinbox.core.translation.checkpoint import CheckpointManager
+from tinbox.core.translation.interface import ModelInterface, TranslationResponse
+from tinbox.core.types import TranslationResult
 
 
 @pytest.fixture
@@ -156,8 +155,6 @@ def test_translate_dry_run(cli_runner, mock_cost_estimate):
         test_file.unlink()
 
 
-
-
 def test_translate_with_warnings(cli_runner):
     """Test translation with cost warnings."""
     test_file = Path("test.txt")
@@ -196,8 +193,6 @@ def test_translate_with_warnings(cli_runner):
         test_file.unlink()
 
 
-
-
 def test_translate_with_output_file(
     cli_runner,
     mock_cost_estimate,
@@ -225,7 +220,7 @@ def test_translate_with_output_file(
             ),
             patch("tinbox.cli.create_translator", return_value=mock_model_interface),
             patch("tinbox.cli.console"),
-            ):
+        ):
             result = cli_runner.invoke(
                 app,
                 [
@@ -289,7 +284,7 @@ def test_translate_verbose_mode(
             ),
             patch("tinbox.cli.create_translator", return_value=mock_model_interface),
             patch("tinbox.cli.console"),
-            ):
+        ):
             result = cli_runner.invoke(
                 app,
                 [
@@ -306,8 +301,6 @@ def test_translate_verbose_mode(
 
     finally:
         test_file.unlink()
-
-
 
 
 def test_translate_force_mode(
@@ -336,7 +329,7 @@ def test_translate_force_mode(
             ),
             patch("tinbox.cli.create_translator", return_value=mock_model_interface),
             patch("tinbox.cli.console"),
-            ):
+        ):
             result = cli_runner.invoke(
                 app,
                 [
@@ -353,8 +346,6 @@ def test_translate_force_mode(
 
     finally:
         test_file.unlink()
-
-
 
 
 def test_translate_max_cost(cli_runner):
@@ -399,48 +390,44 @@ def test_translate_max_cost(cli_runner):
         test_file.unlink()
 
 
-
 def test_cli_context_aware_default(cli_runner, tmp_path):
     """Test that context-aware is the default algorithm."""
     input_file = tmp_path / "test.txt"
     input_file.write_text("Test content")
-    
-    with patch("tinbox.cli.estimate_cost") as mock_estimate, \
-         patch("tinbox.cli.load_document") as mock_load, \
-         patch("tinbox.cli.create_translator") as mock_translator, \
-         patch("tinbox.cli.translate_document") as mock_translate, \
-         patch("tinbox.cli.console"):
-        
+
+    with (
+        patch("tinbox.cli.estimate_cost") as mock_estimate,
+        patch("tinbox.cli.load_document") as mock_load,
+        patch("tinbox.cli.create_translator"),
+        patch("tinbox.cli.translate_document") as mock_translate,
+        patch("tinbox.cli.console"),
+    ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
-            estimated_tokens=100,
-            estimated_cost=0.01,
-            estimated_time=10.0,
-            warnings=[]
+            estimated_tokens=100, estimated_cost=0.01, estimated_time=10.0, warnings=[]
         )
         mock_load.return_value = DocumentContent(
-            pages=["Test content"],
-            content_type="text/plain",
-            metadata={}
+            pages=["Test content"], content_type="text/plain", metadata={}
         )
         # Mock translate_document to return a proper result object
         mock_translate.return_value = TranslationResponse(
-            text="Translated text",
-            tokens_used=100,
-            cost=0.01,
-            time_taken=5.0
+            text="Translated text", tokens_used=100, cost=0.01, time_taken=5.0
         )
-        
+
         # Don't specify algorithm - should default to context-aware
-        result = cli_runner.invoke(app, [
-            "translate",
-            str(input_file),
-            "--model", "openai:gpt-4o",
-            "--force",
-        ])
-        
+        result = cli_runner.invoke(
+            app,
+            [
+                "translate",
+                str(input_file),
+                "--model",
+                "openai:gpt-4o",
+                "--force",
+            ],
+        )
+
         assert result.exit_code == 0
-        
+
         # Verify default algorithm is context-aware
         mock_estimate.assert_called_once()
         call_args = mock_estimate.call_args
@@ -452,38 +439,37 @@ def test_pdf_auto_selects_page_algorithm(cli_runner, tmp_path):
     input_file = tmp_path / "test.pdf"
     input_file.write_bytes(b"%PDF-1.4 test")  # Minimal PDF-like content
 
-    with patch("tinbox.cli.estimate_cost") as mock_estimate, \
-         patch("tinbox.cli.load_document") as mock_load, \
-         patch("tinbox.cli.create_translator") as mock_translator, \
-         patch("tinbox.cli.translate_document") as mock_translate, \
-         patch("tinbox.cli.console"):
-
+    with (
+        patch("tinbox.cli.estimate_cost") as mock_estimate,
+        patch("tinbox.cli.load_document") as mock_load,
+        patch("tinbox.cli.create_translator"),
+        patch("tinbox.cli.translate_document") as mock_translate,
+        patch("tinbox.cli.console"),
+    ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
-            estimated_tokens=100,
-            estimated_cost=0.01,
-            estimated_time=10.0,
-            warnings=[]
+            estimated_tokens=100, estimated_cost=0.01, estimated_time=10.0, warnings=[]
         )
         mock_load.return_value = DocumentContent(
             pages=[b"image bytes"],  # PDF returns bytes
             content_type="image/png",
-            metadata={}
+            metadata={},
         )
         mock_translate.return_value = TranslationResponse(
-            text="Translated text",
-            tokens_used=100,
-            cost=0.01,
-            time_taken=5.0
+            text="Translated text", tokens_used=100, cost=0.01, time_taken=5.0
         )
 
         # Don't specify algorithm - should auto-select 'page' for PDF
-        result = cli_runner.invoke(app, [
-            "translate",
-            str(input_file),
-            "--model", "openai:gpt-4o",
-            "--force",
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "translate",
+                str(input_file),
+                "--model",
+                "openai:gpt-4o",
+                "--force",
+            ],
+        )
 
         assert result.exit_code == 0
 
@@ -500,12 +486,17 @@ def test_pdf_rejects_context_aware_algorithm(cli_runner, tmp_path):
 
     with patch("tinbox.cli.console") as mock_console:
         # Explicitly specify context-aware for PDF - should fail
-        result = cli_runner.invoke(app, [
-            "translate",
-            str(input_file),
-            "--model", "openai:gpt-4o",
-            "--algorithm", "context-aware",
-        ])
+        result = cli_runner.invoke(
+            app,
+            [
+                "translate",
+                str(input_file),
+                "--model",
+                "openai:gpt-4o",
+                "--algorithm",
+                "context-aware",
+            ],
+        )
 
         assert result.exit_code == 1
         # Verify the error message was printed via console
@@ -520,42 +511,39 @@ def test_translate_reasoning_effort_default(cli_runner, tmp_path):
     """Test that reasoning_effort defaults to minimal."""
     input_file = tmp_path / "test.txt"
     input_file.write_text("Test content")
-    
-    with patch("tinbox.cli.estimate_cost") as mock_estimate, \
-         patch("tinbox.cli.load_document") as mock_load, \
-         patch("tinbox.cli.create_translator") as mock_translator, \
-         patch("tinbox.cli.translate_document") as mock_translate, \
-         patch("tinbox.cli.console"):
-        
+
+    with (
+        patch("tinbox.cli.estimate_cost") as mock_estimate,
+        patch("tinbox.cli.load_document") as mock_load,
+        patch("tinbox.cli.create_translator"),
+        patch("tinbox.cli.translate_document") as mock_translate,
+        patch("tinbox.cli.console"),
+    ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
-            estimated_tokens=100,
-            estimated_cost=0.01,
-            estimated_time=10.0,
-            warnings=[]
+            estimated_tokens=100, estimated_cost=0.01, estimated_time=10.0, warnings=[]
         )
         mock_load.return_value = DocumentContent(
-            pages=["Test content"],
-            content_type="text/plain",
-            metadata={}
+            pages=["Test content"], content_type="text/plain", metadata={}
         )
         mock_translate.return_value = TranslationResponse(
-            text="Translated text",
-            tokens_used=100,
-            cost=0.01,
-            time_taken=5.0
+            text="Translated text", tokens_used=100, cost=0.01, time_taken=5.0
         )
-        
+
         # Don't specify reasoning_effort - should default to minimal
-        result = cli_runner.invoke(app, [
-            "translate",
-            str(input_file),
-            "--model", "openai:gpt-4o",
-            "--force",
-        ])
-        
+        result = cli_runner.invoke(
+            app,
+            [
+                "translate",
+                str(input_file),
+                "--model",
+                "openai:gpt-4o",
+                "--force",
+            ],
+        )
+
         assert result.exit_code == 0
-        
+
         # Verify default reasoning_effort is minimal
         mock_estimate.assert_called_once()
         call_args = mock_estimate.call_args
@@ -566,42 +554,40 @@ def test_translate_reasoning_effort_high(cli_runner, tmp_path):
     """Test translation with high reasoning effort."""
     input_file = tmp_path / "test.txt"
     input_file.write_text("Test content")
-    
-    with patch("tinbox.cli.estimate_cost") as mock_estimate, \
-         patch("tinbox.cli.load_document") as mock_load, \
-         patch("tinbox.cli.create_translator") as mock_translator, \
-         patch("tinbox.cli.translate_document") as mock_translate, \
-         patch("tinbox.cli.console"):
-        
+
+    with (
+        patch("tinbox.cli.estimate_cost") as mock_estimate,
+        patch("tinbox.cli.load_document") as mock_load,
+        patch("tinbox.cli.create_translator"),
+        patch("tinbox.cli.translate_document") as mock_translate,
+        patch("tinbox.cli.console"),
+    ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
-            estimated_tokens=100,
-            estimated_cost=0.01,
-            estimated_time=10.0,
-            warnings=[]
+            estimated_tokens=100, estimated_cost=0.01, estimated_time=10.0, warnings=[]
         )
         mock_load.return_value = DocumentContent(
-            pages=["Test content"],
-            content_type="text/plain",
-            metadata={}
+            pages=["Test content"], content_type="text/plain", metadata={}
         )
         mock_translate.return_value = TranslationResponse(
-            text="Translated text",
-            tokens_used=100,
-            cost=0.01,
-            time_taken=5.0
+            text="Translated text", tokens_used=100, cost=0.01, time_taken=5.0
         )
-        
-        result = cli_runner.invoke(app, [
-            "translate",
-            str(input_file),
-            "--model", "openai:gpt-4o",
-            "--reasoning-effort", "high",
-            "--force",
-        ])
-        
+
+        result = cli_runner.invoke(
+            app,
+            [
+                "translate",
+                str(input_file),
+                "--model",
+                "openai:gpt-4o",
+                "--reasoning-effort",
+                "high",
+                "--force",
+            ],
+        )
+
         assert result.exit_code == 0
-        
+
         # Verify reasoning_effort is passed correctly
         mock_estimate.assert_called_once()
         call_args = mock_estimate.call_args
@@ -612,14 +598,19 @@ def test_translate_invalid_reasoning_effort(cli_runner, tmp_path):
     """Test translation with invalid reasoning effort."""
     input_file = tmp_path / "test.txt"
     input_file.write_text("Test content")
-    
-    result = cli_runner.invoke(app, [
-        "translate",
-        str(input_file),
-        "--model", "openai:gpt-4o",
-        "--reasoning-effort", "invalid",
-    ])
-    
+
+    result = cli_runner.invoke(
+        app,
+        [
+            "translate",
+            str(input_file),
+            "--model",
+            "openai:gpt-4o",
+            "--reasoning-effort",
+            "invalid",
+        ],
+    )
+
     assert result.exit_code == 1
     assert "Invalid reasoning effort" in result.stdout
 
@@ -672,10 +663,10 @@ def test_translate_with_checkpoints_cleanup_success(
                 str(tmp_path / "checkpoints"),
             ],
         )
-        
+
         assert result.exit_code == 0
         assert output_file.exists()
-        
+
         # Verify checkpoint cleanup was called after successful translation
         mock_checkpoint_manager.cleanup_old_checkpoints.assert_called_once_with(
             input_file
@@ -722,9 +713,9 @@ def test_translate_with_checkpoints_no_cleanup_without_checkpoint_dir(
                 # No --checkpoint-dir specified
             ],
         )
-        
+
         assert result.exit_code == 0
-        
+
         # Verify CheckpointManager was never instantiated
         mock_checkpoint_class.assert_not_called()
 
@@ -748,12 +739,12 @@ def test_translate_with_checkpoints_cleanup_called_after_output_written(
 
     # Track call order
     call_order = []
-    
+
     def track_write(*args, **kwargs):
         call_order.append("write")
         # Actually write the file
         output_file.write_text(mock_translation_result.text)
-    
+
     async def track_cleanup(*args, **kwargs):
         call_order.append("cleanup")
 
@@ -778,10 +769,10 @@ def test_translate_with_checkpoints_cleanup_called_after_output_written(
             mock_handler = MagicMock()
             mock_handler.write = MagicMock(side_effect=track_write)
             mock_create_handler.return_value = mock_handler
-            
+
             # Mock cleanup to track when it's called
             mock_checkpoint_manager.cleanup_old_checkpoints.side_effect = track_cleanup
-            
+
             result = cli_runner.invoke(
                 app,
                 [
@@ -797,12 +788,12 @@ def test_translate_with_checkpoints_cleanup_called_after_output_written(
                     str(tmp_path / "checkpoints"),
                 ],
             )
-            
+
             assert result.exit_code == 0
-            
+
             # Verify that output was written before cleanup
             assert call_order == ["write", "cleanup"]
-            
+
             # Verify cleanup was called
             mock_checkpoint_manager.cleanup_old_checkpoints.assert_called_once_with(
                 input_file

@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from tinbox.core.translation.glossary import GlossaryManager
 from tinbox.core.types import Glossary, GlossaryEntry
 
@@ -26,10 +24,12 @@ def test_glossary_manager_update():
 
 def test_glossary_save_load_roundtrip(tmp_path: Path):
     mgr = GlossaryManager()
-    mgr.update_glossary([
-        GlossaryEntry(term="RAM", translation="Mémoire vive"),
-        GlossaryEntry(term="SSD", translation="Disque SSD"),
-    ])
+    mgr.update_glossary(
+        [
+            GlossaryEntry(term="RAM", translation="Mémoire vive"),
+            GlossaryEntry(term="SSD", translation="Disque SSD"),
+        ]
+    )
     path = tmp_path / "terms.json"
     mgr.save_to_file(path)
 
@@ -42,12 +42,14 @@ def test_glossary_save_load_roundtrip(tmp_path: Path):
 def test_glossary_manager_restore_from_checkpoint():
     mgr = GlossaryManager()
     assert mgr.get_current_glossary().entries == {}
-    
+
     # Simulate restoring from checkpoint
-    checkpoint_entries = {"API": "Interface de programmation", "SDK": "Kit de développement"}
+    checkpoint_entries = {
+        "API": "Interface de programmation",
+        "SDK": "Kit de développement",
+    }
     mgr.restore_from_checkpoint(checkpoint_entries)
-    
+
     current = mgr.get_current_glossary()
     assert current.entries["API"] == "Interface de programmation"
     assert current.entries["SDK"] == "Kit de développement"
-

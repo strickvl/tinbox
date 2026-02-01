@@ -1,7 +1,8 @@
 """Tests for reasoning effort functionality."""
 
-from typing import Any, Dict
+from typing import Any
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from tinbox.core.translation.interface import TranslationRequest
@@ -18,12 +19,12 @@ def translator():
 @pytest.mark.asyncio
 async def test_reasoning_effort_passed_to_completion(translator: LiteLLMTranslator):
     """Test that reasoning_effort is correctly passed to the completion call."""
-    
-    def mock_completion(*args: Any, **kwargs: Dict[str, Any]) -> Any:
+
+    def mock_completion(*args: Any, **kwargs: dict[str, Any]) -> Any:
         # Verify reasoning_effort is passed correctly
         assert "reasoning_effort" in kwargs
         assert kwargs["reasoning_effort"] == "high"
-        
+
         # Return a mock response
         response = MagicMock()
         response.choices = [MagicMock()]
@@ -35,7 +36,9 @@ async def test_reasoning_effort_passed_to_completion(translator: LiteLLMTranslat
         response._hidden_params = {"response_cost": 0.01}
         return response
 
-    with patch("tinbox.core.translation.litellm.completion", side_effect=mock_completion):
+    with patch(
+        "tinbox.core.translation.litellm.completion", side_effect=mock_completion
+    ):
         request = TranslationRequest(
             source_lang="en",
             target_lang="es",
@@ -54,12 +57,12 @@ async def test_reasoning_effort_passed_to_completion(translator: LiteLLMTranslat
 @pytest.mark.asyncio
 async def test_reasoning_effort_default_minimal(translator: LiteLLMTranslator):
     """Test that reasoning_effort defaults to minimal."""
-    
-    def mock_completion(*args: Any, **kwargs: Dict[str, Any]) -> Any:
+
+    def mock_completion(*args: Any, **kwargs: dict[str, Any]) -> Any:
         # Verify reasoning_effort defaults to minimal
         assert "reasoning_effort" in kwargs
         assert kwargs["reasoning_effort"] == "minimal"
-        
+
         # Return a mock response
         response = MagicMock()
         response.choices = [MagicMock()]
@@ -71,7 +74,9 @@ async def test_reasoning_effort_default_minimal(translator: LiteLLMTranslator):
         response._hidden_params = {"response_cost": 0.01}
         return response
 
-    with patch("tinbox.core.translation.litellm.completion", side_effect=mock_completion):
+    with patch(
+        "tinbox.core.translation.litellm.completion", side_effect=mock_completion
+    ):
         request = TranslationRequest(
             source_lang="en",
             target_lang="es",
@@ -91,12 +96,12 @@ async def test_reasoning_effort_default_minimal(translator: LiteLLMTranslator):
 @pytest.mark.asyncio
 async def test_reasoning_effort_all_values(translator: LiteLLMTranslator, effort):
     """Test that all reasoning effort values are passed correctly."""
-    
-    def mock_completion(*args: Any, **kwargs: Dict[str, Any]) -> Any:
+
+    def mock_completion(*args: Any, **kwargs: dict[str, Any]) -> Any:
         # Verify reasoning_effort is passed correctly
         assert "reasoning_effort" in kwargs
         assert kwargs["reasoning_effort"] == effort
-        
+
         # Return a mock response
         response = MagicMock()
         response.choices = [MagicMock()]
@@ -108,7 +113,9 @@ async def test_reasoning_effort_all_values(translator: LiteLLMTranslator, effort
         response._hidden_params = {"response_cost": 0.01}
         return response
 
-    with patch("tinbox.core.translation.litellm.completion", side_effect=mock_completion):
+    with patch(
+        "tinbox.core.translation.litellm.completion", side_effect=mock_completion
+    ):
         request = TranslationRequest(
             source_lang="en",
             target_lang="es",

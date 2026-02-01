@@ -31,7 +31,9 @@ class DoctorReport(BaseModel):
     def required_ok(self) -> bool:
         """Return True if all required checks passed (excludes optional API keys and local models)."""
         optional_categories = {"API Keys", "Local Models"}
-        required_checks = [c for c in self.checks if c.category not in optional_categories]
+        required_checks = [
+            c for c in self.checks if c.category not in optional_categories
+        ]
         return all(check.ok for check in required_checks)
 
 
@@ -101,9 +103,8 @@ def check_python_docx() -> DoctorCheck:
 def check_pillow() -> DoctorCheck:
     """Check if Pillow is installed."""
     try:
-        from PIL import Image
-
         import PIL
+        from PIL import Image
 
         version = getattr(PIL, "__version__", "unknown")
         return DoctorCheck(

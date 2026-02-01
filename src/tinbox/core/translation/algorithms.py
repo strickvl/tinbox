@@ -1,9 +1,8 @@
 """Translation algorithms for Tinbox."""
 
-import asyncio
 import re
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 from rich.progress import Progress, TaskID
 
@@ -11,20 +10,16 @@ from tinbox.core.processor import DocumentContent
 from tinbox.core.translation.checkpoint import (
     CheckpointManager,
     TranslationState,
-    ResumeResult,
-    should_resume,
-    load_checkpoint,
     resume_from_checkpoint,
 )
 from tinbox.core.translation.glossary import GlossaryManager
-from tinbox.core.types import Glossary
 from tinbox.core.translation.interface import (
     ModelInterface,
     TranslationError,
     TranslationRequest,
     TranslationResponse,
 )
-from tinbox.core.types import TranslationConfig, TranslationResult
+from tinbox.core.types import TranslationConfig
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -196,7 +191,8 @@ async def translate_page_by_page(
         if resume_result.resumed and resume_result.metadata.get("translated_chunks"):
             # Restore from checkpoint's translated_chunks which has page numbers as keys
             translated_pages_by_num = {
-                int(k): v for k, v in resume_result.metadata["translated_chunks"].items()
+                int(k): v
+                for k, v in resume_result.metadata["translated_chunks"].items()
             }
         elif resume_result.translated_items:
             # Fallback: assume sequential from page 1
@@ -204,7 +200,9 @@ async def translate_page_by_page(
                 translated_pages_by_num[i] = text
 
         if progress and task_id is not None and resume_result.resumed:
-            progress.update(task_id, completed=len(translated_pages_by_num), total_cost=total_cost)
+            progress.update(
+                task_id, completed=len(translated_pages_by_num), total_cost=total_cost
+            )
 
         # Track failed pages with their error messages
         failed_pages: list[int] = []
@@ -218,7 +216,8 @@ async def translate_page_by_page(
         if len(translated_pages_by_num) == len(content.pages):
             # Build final text in page order
             final_text = "\n\n".join(
-                translated_pages_by_num[p] for p in sorted(translated_pages_by_num.keys())
+                translated_pages_by_num[p]
+                for p in sorted(translated_pages_by_num.keys())
             )
             time_taken = (datetime.now() - start_time).total_seconds()
             return TranslationResponse(
@@ -246,7 +245,9 @@ async def translate_page_by_page(
                     model_params={"model_name": config.model_name}
                     if config.model_name
                     else {},
-                    glossary=glossary_manager.get_current_glossary() if config.use_glossary and glossary_manager else None,
+                    glossary=glossary_manager.get_current_glossary()
+                    if config.use_glossary and glossary_manager
+                    else None,
                     reasoning_effort=config.reasoning_effort,
                 )
 
@@ -282,7 +283,9 @@ async def translate_page_by_page(
                         token_usage=total_tokens,
                         cost=total_cost,
                         time_taken=(datetime.now() - start_time).total_seconds(),
-                        glossary_entries=glossary_manager.get_current_glossary().entries if glossary_manager else {},
+                        glossary_entries=glossary_manager.get_current_glossary().entries
+                        if glossary_manager
+                        else {},
                     )
                     await checkpoint_manager.save(state)
 
@@ -293,7 +296,9 @@ async def translate_page_by_page(
                 page_errors[page_num] = error_msg
 
             if config.max_cost and total_cost > config.max_cost:
-                raise TranslationError(f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}")
+                raise TranslationError(
+                    f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}"
+                )
 
         if not translated_pages_by_num:
             if failed_pages:
@@ -302,7 +307,7 @@ async def translate_page_by_page(
                 )
             else:
                 raise TranslationError(
-                    f"Translation failed: No pages were successfully translated"
+                    "Translation failed: No pages were successfully translated"
                 )
 
         # Build warnings list
@@ -345,7 +350,7 @@ async def translate_page_by_page(
         )
 
     except Exception as e:
-        raise TranslationError(f"Translation failed: {str(e)}") from e
+        raise TranslationError(f"Translation failed: {e!s}") from e
 
 
 async def translate_sliding_window(
@@ -394,9 +399,7 @@ async def translate_sliding_window(
             if config.overlap_size is not None
             else min(100, window_size // 4)
         )
-        logger.info(
-            f"Using window size: {window_size}, overlap size: {overlap_size}"
-        )
+        logger.info(f"Using window size: {window_size}, overlap size: {overlap_size}")
 
         # Create windows
         windows = create_windows(
@@ -410,7 +413,7 @@ async def translate_sliding_window(
         resume_result = await resume_from_checkpoint(checkpoint_manager, config)
         total_tokens = resume_result.total_tokens
         total_cost = resume_result.total_cost
-        
+
         translated_windows = resume_result.translated_items
 
         # Set up progress tracking
@@ -427,7 +430,9 @@ async def translate_sliding_window(
             glossary_manager.restore_from_checkpoint(resume_result.glossary_entries)
 
         # Translate remaining windows
-        for i, window in enumerate(windows[len(translated_windows):], len(translated_windows)):
+        for i, window in enumerate(
+            windows[len(translated_windows) :], len(translated_windows)
+        ):
             logger.debug(f"Translating window {i + 1}: {window}")
             # Create translation request
             request = TranslationRequest(
@@ -440,7 +445,9 @@ async def translate_sliding_window(
                 model_params={"model_name": config.model_name}
                 if config.model_name
                 else {},
-                glossary=glossary_manager.get_current_glossary() if config.use_glossary and glossary_manager else None,
+                glossary=glossary_manager.get_current_glossary()
+                if config.use_glossary and glossary_manager
+                else None,
                 reasoning_effort=config.reasoning_effort,
             )
 
@@ -450,7 +457,7 @@ async def translate_sliding_window(
             # Update glossary if new terms were discovered
             if response.glossary_updates and glossary_manager:
                 glossary_manager.update_glossary(response.glossary_updates)
-            
+
             translated_windows.append(response.text)
             total_tokens += response.tokens_used
             total_cost += response.cost
@@ -480,12 +487,16 @@ async def translate_sliding_window(
                     token_usage=total_tokens,
                     cost=total_cost,
                     time_taken=(datetime.now() - start_time).total_seconds(),
-                    glossary_entries=glossary_manager.get_current_glossary().entries if glossary_manager else {},
+                    glossary_entries=glossary_manager.get_current_glossary().entries
+                    if glossary_manager
+                    else {},
                 )
                 await checkpoint_manager.save(state)
 
             if config.max_cost and total_cost > config.max_cost:
-                raise TranslationError(f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}")
+                raise TranslationError(
+                    f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}"
+                )
 
         # Merge windows
         final_text = merge_chunks(translated_windows, overlap_size)
@@ -501,8 +512,8 @@ async def translate_sliding_window(
         )
 
     except Exception as e:
-        logger.error(f"Error in sliding window translation: {str(e)}")
-        raise TranslationError(f"Translation failed: {str(e)}") from e
+        logger.error(f"Error in sliding window translation: {e!s}")
+        raise TranslationError(f"Translation failed: {e!s}") from e
 
 
 def create_windows(
@@ -598,11 +609,10 @@ def merge_chunks(chunks: list[str], overlap_size: int) -> str:
 
     return result
 
+
 def smart_text_split(
-    text: str,
-    target_size: int,
-    custom_split_token: Optional[str] = None
-) -> List[str]:
+    text: str, target_size: int, custom_split_token: Optional[str] = None
+) -> list[str]:
     """Split text at natural boundaries or custom tokens.
 
     Priority order:
@@ -626,7 +636,7 @@ def smart_text_split(
     """
     if not text:
         return []
-    
+
     if target_size <= 0:
         raise ValueError("target_size must be positive")
 
@@ -646,7 +656,7 @@ def smart_text_split(
     while current_pos < len(text):
         # Calculate the end position for this chunk
         end_pos = min(current_pos + target_size, len(text))
-        
+
         # If we're at the end of the text, take the remaining text
         if end_pos == len(text):
             chunks.append(text[current_pos:end_pos])
@@ -655,30 +665,30 @@ def smart_text_split(
         # Try to find a good split point within the target size
         chunk_text = text[current_pos:end_pos]
         best_split_pos = len(chunk_text)  # Default to target size
-        
+
         # Priority 1: Paragraph breaks (\n\n)
-        paragraph_matches = list(re.finditer(r'\n\n', chunk_text))
+        paragraph_matches = list(re.finditer(r"\n\n", chunk_text))
         if paragraph_matches:
             # Take the last paragraph break within the chunk
             best_split_pos = paragraph_matches[-1].end()
         else:
             # Priority 2: Sentence endings ([.!?]\s+)
-            sentence_matches = list(re.finditer(r'[.!?]\s+', chunk_text))
+            sentence_matches = list(re.finditer(r"[.!?]\s+", chunk_text))
             if sentence_matches:
                 best_split_pos = sentence_matches[-1].end()
             else:
                 # Priority 3: Line breaks (\n)
-                line_matches = list(re.finditer(r'\n', chunk_text))
+                line_matches = list(re.finditer(r"\n", chunk_text))
                 if line_matches:
                     best_split_pos = line_matches[-1].end()
                 else:
                     # Priority 4: Clause boundaries ([;:,]\s+)
-                    clause_matches = list(re.finditer(r'[;:,]\s+', chunk_text))
+                    clause_matches = list(re.finditer(r"[;:,]\s+", chunk_text))
                     if clause_matches:
                         best_split_pos = clause_matches[-1].end()
                     else:
                         # Priority 5: Word boundaries (\s+)
-                        word_matches = list(re.finditer(r'\s+', chunk_text))
+                        word_matches = list(re.finditer(r"\s+", chunk_text))
                         if word_matches:
                             best_split_pos = word_matches[-1].end()
                         # If no word boundaries found, split at target size (fallback)
@@ -686,13 +696,15 @@ def smart_text_split(
         # Extract the chunk up to the best split position
         actual_end = current_pos + best_split_pos
         chunk = text[current_pos:actual_end]
-        
+
         if chunk:  # Only add non-empty chunks
             chunks.append(chunk)
-        
+
         # Move to the next position
         # Only skip ahead if we found no natural split point (best_split_pos == target_size)
-        if best_split_pos == len(chunk_text) and current_pos + best_split_pos < len(text):
+        if best_split_pos == len(chunk_text) and current_pos + best_split_pos < len(
+            text
+        ):
             # No natural boundary found, ensure we make progress by skipping whitespace
             current_pos = actual_end
             while current_pos < len(text) and text[current_pos].isspace():
@@ -702,6 +714,7 @@ def smart_text_split(
             current_pos = actual_end
 
     return chunks
+
 
 def build_translation_context_info(
     source_lang: str,
@@ -714,7 +727,7 @@ def build_translation_context_info(
 
     Args:
         source_lang: Source language code
-        target_lang: Target language code  
+        target_lang: Target language code
         previous_chunk: Previous chunk (for context)
         previous_translation: Previous translation (for consistency)
         next_chunk: Next chunk (for context and flow)
@@ -723,21 +736,25 @@ def build_translation_context_info(
         Context information string, or None if no context available
     """
     context_parts = []
-    
+
     # Add previous context if both chunk and translation are available
     if previous_chunk and previous_translation:
         context_parts.append(f"[PREVIOUS_CHUNK]\n{previous_chunk}\n[/PREVIOUS_CHUNK]")
-        context_parts.append(f"[PREVIOUS_CHUNK_TRANSLATION]\n{previous_translation}\n[/PREVIOUS_CHUNK_TRANSLATION]")
-    
+        context_parts.append(
+            f"[PREVIOUS_CHUNK_TRANSLATION]\n{previous_translation}\n[/PREVIOUS_CHUNK_TRANSLATION]"
+        )
+
     # Add next context if available
     if next_chunk:
         context_parts.append(f"[NEXT_CHUNK]\n{next_chunk}\n[/NEXT_CHUNK]")
-    
+
     # Return context if we have any parts, otherwise None
     if context_parts:
-        context_parts.append("Use this context to maintain consistency in terminology and style.")
+        context_parts.append(
+            "Use this context to maintain consistency in terminology and style."
+        )
         return "\n\n".join(context_parts)
-    
+
     return None
 
 
@@ -796,10 +813,12 @@ async def translate_context_aware(
         resume_result = await resume_from_checkpoint(checkpoint_manager, config, chunks)
         total_tokens = resume_result.total_tokens
         total_cost = resume_result.total_cost
-        
+
         translated_chunks = resume_result.translated_items
         previous_chunk: Optional[str] = resume_result.metadata.get("previous_chunk")
-        previous_translation: Optional[str] = resume_result.metadata.get("previous_translation")
+        previous_translation: Optional[str] = resume_result.metadata.get(
+            "previous_translation"
+        )
 
         # Set up progress tracking
         if progress:
@@ -815,12 +834,14 @@ async def translate_context_aware(
             glossary_manager.restore_from_checkpoint(resume_result.glossary_entries)
 
         # Translate remaining chunks with context
-        for i, current_chunk in enumerate(chunks[len(translated_chunks):], len(translated_chunks)):
+        for i, current_chunk in enumerate(
+            chunks[len(translated_chunks) :], len(translated_chunks)
+        ):
             logger.debug(f"Translating chunk {i + 1}/{len(chunks)}")
-            
+
             # Get the next chunk if available
             next_chunk = chunks[i + 1] if i + 1 < len(chunks) else None
-            
+
             # Build context information for this chunk
             context_info = build_translation_context_info(
                 source_lang=config.source_lang,
@@ -835,13 +856,15 @@ async def translate_context_aware(
                 source_lang=config.source_lang,
                 target_lang=config.target_lang,
                 content=current_chunk,  # Pure content only
-                context=context_info,   # Separate context
+                context=context_info,  # Separate context
                 content_type="text/plain",
                 model=config.model,
                 model_params={"model_name": config.model_name}
                 if config.model_name
                 else {},
-                glossary=glossary_manager.get_current_glossary() if config.use_glossary and glossary_manager else None,
+                glossary=glossary_manager.get_current_glossary()
+                if config.use_glossary and glossary_manager
+                else None,
                 reasoning_effort=config.reasoning_effort,
             )
 
@@ -871,7 +894,9 @@ async def translate_context_aware(
                     source_lang=config.source_lang,
                     target_lang=config.target_lang,
                     algorithm="context-aware",
-                    completed_pages=[1],  # Context-aware treats the whole document as one page
+                    completed_pages=[
+                        1
+                    ],  # Context-aware treats the whole document as one page
                     failed_pages=[],
                     translated_chunks={
                         j + 1: text for j, text in enumerate(translated_chunks)
@@ -879,12 +904,16 @@ async def translate_context_aware(
                     token_usage=total_tokens,
                     cost=total_cost,
                     time_taken=(datetime.now() - start_time).total_seconds(),
-                    glossary_entries=glossary_manager.get_current_glossary().entries if glossary_manager else {},
+                    glossary_entries=glossary_manager.get_current_glossary().entries
+                    if glossary_manager
+                    else {},
                 )
                 await checkpoint_manager.save(state)
 
             if config.max_cost and total_cost > config.max_cost:
-                raise TranslationError(f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}")
+                raise TranslationError(
+                    f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}"
+                )
 
             # Update context for next iteration
             previous_chunk = current_chunk
@@ -904,5 +933,5 @@ async def translate_context_aware(
         )
 
     except Exception as e:
-        logger.error(f"Error in context-aware translation: {str(e)}")
-        raise TranslationError(f"Translation failed: {str(e)}") from e
+        logger.error(f"Error in context-aware translation: {e!s}")
+        raise TranslationError(f"Translation failed: {e!s}") from e

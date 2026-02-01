@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from tinbox.core.processor import DocumentContent, DocumentMetadata, ProcessingError
+from tinbox.core.processor import DocumentMetadata, ProcessingError
 from tinbox.core.processor.pdf import PdfProcessor
 from tinbox.core.types import FileType
 

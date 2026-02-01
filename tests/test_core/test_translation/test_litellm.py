@@ -2,16 +2,15 @@
 
 import asyncio
 from pathlib import Path
-from typing import Any, Dict
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 from PIL import Image
 
 from tinbox.core.translation.interface import (
-    TranslationRequest,
     TranslationError,
-    TranslationResponse,
+    TranslationRequest,
 )
 from tinbox.core.translation.litellm import LiteLLMTranslator
 from tinbox.core.types import ModelType
@@ -28,7 +27,9 @@ def mock_completion():
     """Create a mock completion response."""
     with patch("tinbox.core.translation.litellm.completion") as mock:
         # Mock response content as JSON string (matching real LiteLLM response format)
-        response_content = '{"translation": "Translated text", "glossary_extension": []}'
+        response_content = (
+            '{"translation": "Translated text", "glossary_extension": []}'
+        )
 
         mock.return_value = type(
             "CompletionResponse",
@@ -44,7 +45,7 @@ def mock_completion():
                                 "Message",
                                 (),
                                 {"content": response_content},
-                            )()
+                            )(),
                         },
                     )
                 ],
@@ -57,14 +58,10 @@ def mock_completion():
                         "completion_time": 0.5,
                     },
                 )(),
-                "_hidden_params": {
-                    "response_cost": 0.001
-                },
+                "_hidden_params": {"response_cost": 0.001},
             },
         )
         yield mock
-
-
 
 
 @pytest.mark.asyncio
@@ -118,7 +115,7 @@ async def test_image_translation(
 async def test_translation_error_handling(translator: LiteLLMTranslator, monkeypatch):
     """Test error handling during translation."""
 
-    def mock_error(*args: Any, **kwargs: Dict[str, Any]) -> None:
+    def mock_error(*args: Any, **kwargs: dict[str, Any]) -> None:
         raise RuntimeError("API error")
 
     # Patch both the module and the imported function
@@ -257,7 +254,7 @@ async def test_malformed_image(translator: LiteLLMTranslator, mock_completion):
 async def test_timeout_handling(translator: LiteLLMTranslator, monkeypatch):
     """Test handling of network timeouts."""
 
-    def mock_timeout(*args: Any, **kwargs: Dict[str, Any]) -> Any:
+    def mock_timeout(*args: Any, **kwargs: dict[str, Any]) -> Any:
         raise asyncio.TimeoutError("Request timed out")
 
     import litellm
@@ -283,7 +280,7 @@ async def test_timeout_handling(translator: LiteLLMTranslator, monkeypatch):
 async def test_rate_limit_handling(translator: LiteLLMTranslator, monkeypatch):
     """Test handling of rate limiting."""
 
-    def mock_rate_limit(*args: Any, **kwargs: Dict[str, Any]) -> Any:
+    def mock_rate_limit(*args: Any, **kwargs: dict[str, Any]) -> Any:
         raise RuntimeError("Rate limit exceeded")
 
     import litellm
@@ -344,7 +341,9 @@ async def test_invalid_language_codes(translator: LiteLLMTranslator, mock_comple
 
 
 @pytest.mark.asyncio
-async def test_hyphenated_language_codes(translator: LiteLLMTranslator, mock_completion):
+async def test_hyphenated_language_codes(
+    translator: LiteLLMTranslator, mock_completion
+):
     """Test that hyphenated language codes like zh-tw are supported."""
     # Traditional Chinese (zh-tw) should be valid
     request = TranslationRequest(
@@ -405,7 +404,7 @@ async def test_mixed_content_handling(translator: LiteLLMTranslator, mock_comple
 async def test_response_validation(translator: LiteLLMTranslator, monkeypatch):
     """Test validation of malformed responses."""
 
-    def mock_malformed_response(*args: Any, **kwargs: Dict[str, Any]) -> Any:
+    def mock_malformed_response(*args: Any, **kwargs: dict[str, Any]) -> Any:
         return type(
             "MalformedResponse",
             (),
@@ -437,7 +436,9 @@ async def test_response_validation(translator: LiteLLMTranslator, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_whitespace_preservation_simple(translator: LiteLLMTranslator, mock_completion):
+async def test_whitespace_preservation_simple(
+    translator: LiteLLMTranslator, mock_completion
+):
     """Test simple whitespace preservation."""
     request = TranslationRequest(
         source_lang="en",
@@ -458,7 +459,9 @@ async def test_whitespace_preservation_simple(translator: LiteLLMTranslator, moc
 
 
 @pytest.mark.asyncio
-async def test_whitespace_preservation_complex(translator: LiteLLMTranslator, mock_completion):
+async def test_whitespace_preservation_complex(
+    translator: LiteLLMTranslator, mock_completion
+):
     """Test complex whitespace preservation with newlines."""
     request = TranslationRequest(
         source_lang="en",
@@ -482,7 +485,7 @@ async def test_whitespace_preservation_complex(translator: LiteLLMTranslator, mo
 async def test_context_handling(translator: LiteLLMTranslator, mock_completion):
     """Test context handling in prompt construction."""
     context_info = "[PREVIOUS_CHUNK]\nPrevious text\n[/PREVIOUS_CHUNK]\n\n[PREVIOUS_CHUNK_TRANSLATION]\nTexto anterior\n[/PREVIOUS_CHUNK_TRANSLATION]\n\nUse this context to maintain consistency in terminology and style."
-    
+
     request = TranslationRequest(
         source_lang="en",
         target_lang="es",
@@ -518,5 +521,3 @@ async def test_context_without_context(translator: LiteLLMTranslator, mock_compl
     assert response.tokens_used == 10
     assert response.cost == 0.001
     assert response.time_taken > 0
-
-

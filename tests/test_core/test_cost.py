@@ -1,12 +1,11 @@
 """Tests for cost estimation functionality."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from tinbox.core.cost import (
-    CostEstimate,
     CostLevel,
     estimate_context_aware_tokens,
     estimate_cost,
@@ -153,15 +152,15 @@ def test_ollama_suggestion():
 def test_estimate_context_aware_tokens():
     """Test context-aware token estimation."""
     base_tokens = 1000
-    
+
     # Test with default multiplier (4.0)
     result = estimate_context_aware_tokens(base_tokens)
     assert result == 4000
-    
+
     # Test with custom multiplier
     result = estimate_context_aware_tokens(base_tokens, context_multiplier=2.0)
     assert result == 2000
-    
+
     # Test with fractional tokens
     result = estimate_context_aware_tokens(1500, context_multiplier=1.5)
     assert result == 2250
@@ -175,29 +174,35 @@ def test_estimate_context_aware_tokens():
         ("context-aware", 4000, 1000),  # 4.0x input tokens for context overhead
     ],
 )
-def test_estimate_cost_by_algorithm(tmp_path, algorithm, expected_input_tokens, expected_output_tokens):
+def test_estimate_cost_by_algorithm(
+    tmp_path, algorithm, expected_input_tokens, expected_output_tokens
+):
     """Test cost estimation for different algorithms."""
     file_path = tmp_path / "test.txt"
     file_path.write_text("Test content")
-    
+
     base_tokens = 1000
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=base_tokens):
         estimate = estimate_cost(file_path, ModelType.OPENAI, algorithm=algorithm)
-        
+
         # Account for prompt overhead (3%)
         if algorithm == "context-aware":
             # Context-aware: 4000 input tokens + 3% prompt overhead
-            adjusted_input_tokens = expected_input_tokens + (expected_input_tokens * 0.03)
+            adjusted_input_tokens = expected_input_tokens + (
+                expected_input_tokens * 0.03
+            )
         else:
             # Page/sliding-window: 1000 input tokens + 3% prompt overhead
-            adjusted_input_tokens = expected_input_tokens + (expected_input_tokens * 0.03)
-        
+            adjusted_input_tokens = expected_input_tokens + (
+                expected_input_tokens * 0.03
+            )
+
         # For OpenAI: input $0.00125/1K, output $0.01/1K
         expected_input_cost = (adjusted_input_tokens / 1000) * 0.00125
         expected_output_cost = (expected_output_tokens / 1000) * 0.01
         expected_total_cost = expected_input_cost + expected_output_cost
-        
+
         assert abs(estimate.estimated_cost - expected_total_cost) < 0.001
         # estimated_tokens now includes input + output tokens
         expected_total_tokens = adjusted_input_tokens + expected_output_tokens
@@ -207,17 +212,18 @@ def test_estimate_cost_by_algorithm(tmp_path, algorithm, expected_input_tokens, 
 def test_context_aware_cost_warning():
     """Test context-aware algorithm cost warning."""
     file_path = Path("test.txt")
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=1000):
         estimate = estimate_cost(file_path, ModelType.OPENAI, algorithm="context-aware")
-        
+
         # Should have context overhead warning
         context_warnings = [
-            warning for warning in estimate.warnings
+            warning
+            for warning in estimate.warnings
             if "Context-aware algorithm uses additional input tokens" in warning
         ]
         assert len(context_warnings) == 1
-        
+
         # Should mention the overhead amount
         warning = context_warnings[0]
         # Context-aware tokens: 4000, plus 3% prompt overhead = 4120
@@ -230,13 +236,14 @@ def test_context_aware_cost_warning():
 def test_context_aware_no_warning_for_ollama():
     """Test that context-aware algorithm doesn't warn for Ollama."""
     file_path = Path("test.txt")
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=1000):
         estimate = estimate_cost(file_path, ModelType.OLLAMA, algorithm="context-aware")
-        
+
         # Should not have context overhead warning for free models
         context_warnings = [
-            warning for warning in estimate.warnings
+            warning
+            for warning in estimate.warnings
             if "Context-aware algorithm uses additional input tokens" in warning
         ]
         assert len(context_warnings) == 0
@@ -246,20 +253,27 @@ def test_glossary_cost_overhead():
     """Test glossary adds proper cost overhead."""
     file_path = Path("test.txt")
     base_tokens = 1000
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=base_tokens):
         # Test without glossary
-        estimate_no_glossary = estimate_cost(file_path, ModelType.OPENAI, use_glossary=False)
-        
+        estimate_no_glossary = estimate_cost(
+            file_path, ModelType.OPENAI, use_glossary=False
+        )
+
         # Test with glossary
-        estimate_with_glossary = estimate_cost(file_path, ModelType.OPENAI, use_glossary=True)
-        
+        estimate_with_glossary = estimate_cost(
+            file_path, ModelType.OPENAI, use_glossary=True
+        )
+
         # With glossary should cost more
-        assert estimate_with_glossary.estimated_cost > estimate_no_glossary.estimated_cost
-        
+        assert (
+            estimate_with_glossary.estimated_cost > estimate_no_glossary.estimated_cost
+        )
+
         # Should have glossary warning
         glossary_warnings = [
-            warning for warning in estimate_with_glossary.warnings
+            warning
+            for warning in estimate_with_glossary.warnings
             if "Glossary enabled adds input token overhead" in warning
         ]
         assert len(glossary_warnings) == 1
@@ -269,13 +283,14 @@ def test_glossary_cost_overhead():
 def test_glossary_no_warning_for_ollama():
     """Test that glossary doesn't warn for Ollama."""
     file_path = Path("test.txt")
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=1000):
         estimate = estimate_cost(file_path, ModelType.OLLAMA, use_glossary=True)
-        
+
         # Should not have glossary warning for free models
         glossary_warnings = [
-            warning for warning in estimate.warnings
+            warning
+            for warning in estimate.warnings
             if "Glossary enabled adds input token overhead" in warning
         ]
         assert len(glossary_warnings) == 0
@@ -284,18 +299,15 @@ def test_glossary_no_warning_for_ollama():
 def test_reasoning_effort_minimal_no_warning():
     """Test that minimal reasoning effort doesn't produce warnings."""
     test_file = Path("test.txt")
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=1000):
         estimate = estimate_cost(
-            test_file, 
-            ModelType.OPENAI, 
-            reasoning_effort="minimal"
+            test_file, ModelType.OPENAI, reasoning_effort="minimal"
         )
-    
+
     # Should not have reasoning effort warning for minimal
     reasoning_warnings = [
-        warning for warning in estimate.warnings
-        if "Reasoning effort is" in warning
+        warning for warning in estimate.warnings if "Reasoning effort is" in warning
     ]
     assert len(reasoning_warnings) == 0
 
@@ -304,18 +316,15 @@ def test_reasoning_effort_minimal_no_warning():
 def test_reasoning_effort_warning(reasoning_effort):
     """Test that non-minimal reasoning effort produces warnings."""
     test_file = Path("test.txt")
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=1000):
         estimate = estimate_cost(
-            test_file, 
-            ModelType.OPENAI, 
-            reasoning_effort=reasoning_effort
+            test_file, ModelType.OPENAI, reasoning_effort=reasoning_effort
         )
-    
+
     # Should have reasoning effort warning for non-minimal
     reasoning_warnings = [
-        warning for warning in estimate.warnings
-        if "Reasoning effort is" in warning
+        warning for warning in estimate.warnings if "Reasoning effort is" in warning
     ]
     assert len(reasoning_warnings) == 1
     assert f"Reasoning effort is '{reasoning_effort}'" in reasoning_warnings[0]
@@ -326,18 +335,13 @@ def test_reasoning_effort_warning(reasoning_effort):
 def test_reasoning_effort_with_ollama():
     """Test that reasoning effort warning appears even with Ollama (free models)."""
     test_file = Path("test.txt")
-    
+
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=1000):
-        estimate = estimate_cost(
-            test_file, 
-            ModelType.OLLAMA, 
-            reasoning_effort="high"
-        )
-    
+        estimate = estimate_cost(test_file, ModelType.OLLAMA, reasoning_effort="high")
+
     # Should have reasoning effort warning even for free models
     reasoning_warnings = [
-        warning for warning in estimate.warnings
-        if "Reasoning effort is" in warning
+        warning for warning in estimate.warnings if "Reasoning effort is" in warning
     ]
     assert len(reasoning_warnings) == 1
     assert "Reasoning effort is 'high'" in reasoning_warnings[0]

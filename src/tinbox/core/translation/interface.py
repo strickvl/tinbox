@@ -1,10 +1,10 @@
 """Translation interface definitions."""
 
-from typing import Optional, Protocol, Union, List, Literal, Dict
+from typing import Literal, Optional, Protocol, Union
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from tinbox.core.types import ModelType, Glossary, GlossaryEntry
+from tinbox.core.types import Glossary, GlossaryEntry, ModelType
 
 
 class TranslationError(Exception):
@@ -19,7 +19,9 @@ class TranslationRequest(BaseModel):
     source_lang: str
     target_lang: str
     content: Union[str, bytes]  # Pure content to translate (text or image bytes)
-    context: Optional[str] = None  # Supporting context information for better translation
+    context: Optional[str] = (
+        None  # Supporting context information for better translation
+    )
     content_type: str = Field(pattern=r"^(text|image)/.+$")
     model: ModelType
     model_params: dict = Field(
@@ -44,20 +46,20 @@ class TranslationResponse(BaseModel):
     tokens_used: int = Field(ge=0)
     cost: float = Field(ge=0.0)
     time_taken: float = Field(ge=0.0)
-    glossary_updates: List[GlossaryEntry] = Field(
+    glossary_updates: list[GlossaryEntry] = Field(
         default_factory=list,
         description="New glossary entries discovered during this translation",
     )
     # Aggregate response fields (populated by algorithms, not individual translations)
-    failed_pages: List[int] = Field(
+    failed_pages: list[int] = Field(
         default_factory=list,
         description="List of page numbers that failed to translate",
     )
-    page_errors: Dict[int, str] = Field(
+    page_errors: dict[int, str] = Field(
         default_factory=dict,
         description="Mapping from page number to error message",
     )
-    warnings: List[str] = Field(
+    warnings: list[str] = Field(
         default_factory=list,
         description="Non-fatal warnings during translation",
     )
@@ -98,7 +100,7 @@ class TranslationWithGlossaryResponse(BaseModel):
     """Structured LLM response when glossary is enabled."""
 
     translation: str = Field(description="The translated text")
-    glossary_extension: Optional[List[GlossaryEntry]] = Field(
+    glossary_extension: Optional[list[GlossaryEntry]] = Field(
         default=None,
         description="New glossary entries discovered during translation (optional)",
     )

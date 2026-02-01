@@ -439,7 +439,7 @@ async def test_translate_document_algorithm_routing():
         time_taken=0.1,
     )
 
-    content = DocumentContent(
+    DocumentContent(
         pages=["Test content"],
         content_type="text/plain",
         metadata={},
@@ -447,8 +447,12 @@ async def test_translate_document_algorithm_routing():
 
     # Test unknown algorithm - should fail at config validation time
     from pydantic import ValidationError
-    with pytest.raises(ValidationError, match="Input should be 'page', 'sliding-window' or 'context-aware'"):
-        config = TranslationConfig(
+
+    with pytest.raises(
+        ValidationError,
+        match="Input should be 'page', 'sliding-window' or 'context-aware'",
+    ):
+        TranslationConfig(
             source_lang="en",
             target_lang="fr",
             model=ModelType.ANTHROPIC,
@@ -555,7 +559,9 @@ async def test_sliding_window_checkpoint_recovery():
 
     # Create content that will create multiple windows
     content = DocumentContent(
-        pages=["This is a long text that will be split into multiple windows for translation using sliding window algorithm"],
+        pages=[
+            "This is a long text that will be split into multiple windows for translation using sliding window algorithm"
+        ],
         content_type="text/plain",
         metadata={},
     )
@@ -599,7 +605,7 @@ async def test_context_aware_checkpoint_recovery():
     """Test that context-aware translation properly recovers from checkpoint."""
     # Create mock translator that handles context format
     translator = AsyncMock(spec=ModelInterface)
-    
+
     def mock_context_translate(request):
         content = request.content
         if "[TRANSLATE_THIS]" in content and "[/TRANSLATE_THIS]" in content:
@@ -618,7 +624,7 @@ async def test_context_aware_checkpoint_recovery():
             cost=0.0005,
             time_taken=0.1,
         )
-    
+
     translator.translate = AsyncMock(side_effect=mock_context_translate)
 
     # Create checkpoint manager that returns partial completion
@@ -639,7 +645,9 @@ async def test_context_aware_checkpoint_recovery():
 
     # Create content that will create multiple chunks
     content = DocumentContent(
-        pages=["This is chunk one content. This is chunk two content. This is chunk three content. This is chunk four content."],
+        pages=[
+            "This is chunk one content. This is chunk two content. This is chunk three content. This is chunk four content."
+        ],
         content_type="text/plain",
         metadata={},
     )
@@ -714,7 +722,7 @@ async def test_no_checkpoint_available():
     )
 
     # Translate
-    result = await translate_page_by_page(
+    await translate_page_by_page(
         content, config, translator, checkpoint_manager=checkpoint_manager
     )
 
@@ -751,8 +759,8 @@ async def test_page_by_page_all_chunks_completed():
         failed_pages=[],
         translated_chunks={
             1: "Translated page 1",
-            2: "Translated page 2", 
-            3: "Translated page 3"
+            2: "Translated page 2",
+            3: "Translated page 3",
         },
         token_usage=150,
         cost=0.015,
@@ -824,7 +832,7 @@ async def test_context_aware_all_chunks_completed():
         translated_chunks={
             1: "Translated chunk 1",
             2: "Translated chunk 2",
-            3: "Translated chunk 3"
+            3: "Translated chunk 3",
         },
         token_usage=300,
         cost=0.03,
@@ -835,7 +843,9 @@ async def test_context_aware_all_chunks_completed():
 
     # Create content that will be split into exactly 3 chunks (same as completed chunks)
     content = DocumentContent(
-        pages=["Short chunk 1. Short chunk 2. Short chunk 3."],  # Will create 3 chunks with small context_size
+        pages=[
+            "Short chunk 1. Short chunk 2. Short chunk 3."
+        ],  # Will create 3 chunks with small context_size
         content_type="text/plain",
         metadata={},
     )
@@ -892,10 +902,7 @@ async def test_sliding_window_all_chunks_completed():
         algorithm="sliding-window",
         completed_pages=[1],
         failed_pages=[],
-        translated_chunks={
-            1: "Translated window 1",
-            2: "Translated window 2"
-        },
+        translated_chunks={1: "Translated window 1", 2: "Translated window 2"},
         token_usage=200,
         cost=0.02,
         time_taken=40.0,
@@ -905,7 +912,9 @@ async def test_sliding_window_all_chunks_completed():
 
     # Create content that will be split into exactly 2 windows (same as completed chunks)
     content = DocumentContent(
-        pages=["This is exactly thirty chars."],  # Exactly 30 chars, will create exactly 2 windows with size 20 and overlap 5
+        pages=[
+            "This is exactly thirty chars."
+        ],  # Exactly 30 chars, will create exactly 2 windows with size 20 and overlap 5
         content_type="text/plain",
         metadata={},
     )
@@ -1014,7 +1023,9 @@ async def test_sliding_window_max_cost_exceeded():
 
     # Create content that will create multiple windows
     content = DocumentContent(
-        pages=["This is a long text that will be split into multiple windows for testing max cost functionality."],
+        pages=[
+            "This is a long text that will be split into multiple windows for testing max cost functionality."
+        ],
         content_type="text/plain",
         metadata={},
     )
@@ -1067,7 +1078,9 @@ async def test_context_aware_max_cost_exceeded():
 
     # Create content that will create multiple chunks
     content = DocumentContent(
-        pages=["This is chunk one content. This is chunk two content. This is chunk three content."],
+        pages=[
+            "This is chunk one content. This is chunk two content. This is chunk three content."
+        ],
         content_type="text/plain",
         metadata={},
     )

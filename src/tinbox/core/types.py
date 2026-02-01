@@ -2,9 +2,9 @@
 
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Literal, Optional, Dict, List
+from typing import Callable, Literal, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FileType(str, Enum):
@@ -125,15 +125,15 @@ class TranslationResult(BaseModel):
     time_taken: float = Field(ge=0.0)
 
     # Failed page tracking (for page-by-page algorithm)
-    failed_pages: List[int] = Field(
+    failed_pages: list[int] = Field(
         default_factory=list,
         description="List of page numbers that failed to translate",
     )
-    page_errors: Dict[int, str] = Field(
+    page_errors: dict[int, str] = Field(
         default_factory=dict,
         description="Mapping from page number to error message",
     )
-    warnings: List[str] = Field(
+    warnings: list[str] = Field(
         default_factory=list,
         description="Non-fatal warnings during translation",
     )
@@ -144,6 +144,7 @@ class TranslationResult(BaseModel):
 # ----------------------
 # Glossary data types
 # ----------------------
+
 
 class GlossaryEntry(BaseModel):
     """A single glossary entry mapping source term to target translation."""
@@ -157,12 +158,12 @@ class GlossaryEntry(BaseModel):
 class Glossary(BaseModel):
     """Collection of translation glossary entries."""
 
-    entries: Dict[str, str] = Field(
+    entries: dict[str, str] = Field(
         default_factory=dict,
         description="Mapping from source terms to target translations",
     )
 
-    def extend(self, new_entries: List[GlossaryEntry]) -> "Glossary":
+    def extend(self, new_entries: list[GlossaryEntry]) -> "Glossary":
         """Extend glossary with multiple entries and return new instance."""
         if not new_entries:
             return Glossary(entries=self.entries.copy())
@@ -176,7 +177,7 @@ class Glossary(BaseModel):
         """Convert glossary to context string for LLM consumption."""
         if not self.entries:
             return "[The glossary is still empty… add terms as they are encountered.]"
-        lines: List[str] = ["[GLOSSARY]"]
+        lines: list[str] = ["[GLOSSARY]"]
         for term, translation in self.entries.items():
             lines.append(f"{term} -> {translation}")
         lines.append("[/GLOSSARY]")

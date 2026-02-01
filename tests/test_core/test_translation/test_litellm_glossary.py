@@ -1,9 +1,10 @@
-import pytest
 from unittest.mock import patch
 
-from tinbox.core.translation.interface import TranslationRequest, TranslationError
+import pytest
+
+from tinbox.core.translation.interface import TranslationError, TranslationRequest
 from tinbox.core.translation.litellm import LiteLLMTranslator
-from tinbox.core.types import ModelType, Glossary, GlossaryEntry
+from tinbox.core.types import Glossary, ModelType
 
 
 @pytest.mark.asyncio
@@ -24,7 +25,9 @@ async def test_litellm_structured_response_with_glossary():
                         (),
                         {
                             "finish_reason": "stop",
-                            "message": type("Message", (), {"content": response_content})(),
+                            "message": type(
+                                "Message", (), {"content": response_content}
+                            )(),
                         },
                     )
                 ],
@@ -65,7 +68,9 @@ async def test_litellm_raises_on_invalid_json():
                         (),
                         {
                             "finish_reason": "stop",
-                            "message": type("Message", (), {"content": "Plain translated"})(),
+                            "message": type(
+                                "Message", (), {"content": "Plain translated"}
+                            )(),
                         },
                     )
                 ],

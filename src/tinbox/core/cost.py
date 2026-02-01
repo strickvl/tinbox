@@ -3,7 +3,7 @@
 import math
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 from tinbox.core.types import FileType, ModelType
 
@@ -19,10 +19,19 @@ class CostLevel(str, Enum):
 
 # Approximate costs per 1K tokens (as of September 2025)
 # Format: (input_cost_per_1k, output_cost_per_1k)
-MODEL_COSTS: Dict[ModelType, tuple[float, float]] = {
-    ModelType.OPENAI: (0.00125, 0.01),  # $0.00125 per 1K input tokens, $0.01 per 1K output tokens (GPT-5)
-    ModelType.ANTHROPIC: (0.003, 0.015),  # $0.003 per 1K input tokens, $0.015 per 1K output tokens (Sonnet 4)
-    ModelType.GEMINI: (0.00125, 0.01),  # $0.00125 per 1K input tokens, $0.01 per 1K output tokens (Gemini 2.5 Pro)
+MODEL_COSTS: dict[ModelType, tuple[float, float]] = {
+    ModelType.OPENAI: (
+        0.00125,
+        0.01,
+    ),  # $0.00125 per 1K input tokens, $0.01 per 1K output tokens (GPT-5)
+    ModelType.ANTHROPIC: (
+        0.003,
+        0.015,
+    ),  # $0.003 per 1K input tokens, $0.015 per 1K output tokens (Sonnet 4)
+    ModelType.GEMINI: (
+        0.00125,
+        0.01,
+    ),  # $0.00125 per 1K input tokens, $0.01 per 1K output tokens (Gemini 2.5 Pro)
     ModelType.OLLAMA: (0.0, 0.0),  # Free for local models
 }
 
@@ -113,8 +122,7 @@ class CostEstimate:
 
 
 def estimate_context_aware_tokens(
-    estimated_tokens: int,
-    context_multiplier: float = 4
+    estimated_tokens: int, context_multiplier: float = 4
 ) -> int:
     """Estimate input tokens for context-aware translation.
 
@@ -157,7 +165,7 @@ def estimate_cost(
     """
     estimated_tokens = estimate_document_tokens(file_path)
     input_cost_per_1k, output_cost_per_1k = MODEL_COSTS.get(model, (0.0, 0.0))
-    
+
     # Calculate input tokens based on algorithm
     if algorithm == "context-aware":
         input_tokens = estimate_context_aware_tokens(estimated_tokens)
@@ -166,7 +174,7 @@ def estimate_cost(
         # For page and sliding-window algorithms, input and output tokens are roughly equal
         input_tokens = estimated_tokens
         output_tokens = estimated_tokens
-    
+
     # Add general prompt overhead (system prompt, etc.):
     prompt_factor = 0.03
     input_tokens = math.ceil(input_tokens * (1 + prompt_factor))
@@ -174,7 +182,9 @@ def estimate_cost(
     # Add glossary overhead: assume a 20% overhead as per testing
     glossary_factor = 0.20
     if use_glossary:
-        glossary_overhead_tokens = math.ceil((input_tokens + output_tokens) * glossary_factor)
+        glossary_overhead_tokens = math.ceil(
+            (input_tokens + output_tokens) * glossary_factor
+        )
         input_tokens += glossary_overhead_tokens
 
     input_cost = (input_tokens / 1000) * input_cost_per_1k

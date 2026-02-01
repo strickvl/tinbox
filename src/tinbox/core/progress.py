@@ -1,8 +1,5 @@
 """Progress tracking functionality for Tinbox."""
 
-from typing import Optional
-
-from rich.console import Console
 from rich.progress import ProgressColumn, Task, Text
 from rich.text import Text as RichText
 
@@ -16,10 +13,10 @@ class CurrentCostColumn(ProgressColumn):
 
     def render(self, task: Task) -> Text:
         """Render the current cost.
-        
+
         Args:
             task: The progress task
-            
+
         Returns:
             Rich Text object with formatted cost
         """
@@ -35,18 +32,23 @@ class EstimatedCostColumn(ProgressColumn):
 
     def render(self, task: Task) -> Text:
         """Render the estimated total cost.
-        
+
         Args:
             task: The progress task
-            
+
         Returns:
             Rich Text object with formatted estimated cost
         """
         current_cost = task.fields.get("total_cost", 0.0)
-        
-        if task.total is None or task.total == 0 or task.completed == 0 or current_cost == 0:
+
+        if (
+            task.total is None
+            or task.total == 0
+            or task.completed == 0
+            or current_cost == 0
+        ):
             return RichText("$-.----", style="dim")
-        
+
         # Calculate estimated total cost based on progress ratio
         progress_ratio = task.completed / task.total
         if progress_ratio > 0:
@@ -58,10 +60,10 @@ class EstimatedCostColumn(ProgressColumn):
 
 def format_cost(cost: float) -> str:
     """Format cost for display.
-    
+
     Args:
         cost: Cost value to format
-        
+
     Returns:
         Formatted cost string
     """

@@ -1,9 +1,9 @@
 """Language code handling and validation for Tinbox."""
 
 from enum import Enum
-from typing import Dict, Optional
+from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class LanguageCode(str, Enum):
@@ -40,7 +40,7 @@ class LanguageCode(str, Enum):
 
 
 # Common aliases mapping to ISO 639-1 codes
-LANGUAGE_ALIASES: Dict[str, str] = {
+LANGUAGE_ALIASES: dict[str, str] = {
     # English aliases
     "eng": "en",
     "english": "en",
@@ -148,7 +148,7 @@ def validate_language_pair(source: str, target: str) -> tuple[str, str]:
         norm_source = normalize_language_code(source)
         norm_target = normalize_language_code(target)
     except LanguageError as e:
-        raise LanguageError(f"Invalid language code: {str(e)}")
+        raise LanguageError(f"Invalid language code: {e!s}")
 
     # Special handling for auto-detection
     if norm_source == "auto":

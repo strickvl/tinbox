@@ -91,11 +91,18 @@ line-length = 88
 target-version = "py39"
 
 [tool.ruff.lint]
-select = ["E", "F", "B", "I", "N", "UP", "PL", "RUF"]
-ignore = []
+select = ["E", "F", "B", "I", "N", "UP", "RUF"]
+ignore = [
+    "B008",    # Function calls in argument defaults (required for typer)
+    "B904",    # Raise from within except (pre-existing, fix separately)
+    "B017",    # Assert blind exception in tests (acceptable for tests)
+    "E501",    # Line too long (handled by formatter)
+    "RUF043",  # Regex patterns (pre-existing)
+]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"src/tinbox/core/doctor.py" = ["F401"]  # Intentional imports to check availability
 
 [tool.coverage.run]
 source = ["src"]

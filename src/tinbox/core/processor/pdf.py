@@ -2,8 +2,9 @@
 
 import io
 import shutil
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Union
+from typing import Union
 
 import pypdf
 
@@ -22,6 +23,7 @@ def _get_convert_from_path():
     """Lazily import pdf2image.convert_from_path with helpful error message."""
     try:
         from pdf2image import convert_from_path
+
         return convert_from_path
     except ImportError:
         raise ProcessingError(
@@ -110,7 +112,7 @@ class PdfProcessor(BaseDocumentProcessor):
             raise ProcessingError("File format not supported") from e
         except Exception as e:
             logger.exception("Failed to extract PDF metadata")
-            raise ProcessingError(f"Failed to extract PDF metadata: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract PDF metadata: {e!s}") from e
 
     async def extract_content(
         self, file_path: Path, *, start_page: int = 1, end_page: int | None = None
@@ -149,8 +151,7 @@ class PdfProcessor(BaseDocumentProcessor):
                     raise ProcessingError(
                         "Invalid page range: end_page must be >= start_page"
                     )
-                if end_page > total_pages:
-                    end_page = total_pages
+                end_page = min(end_page, total_pages)
 
             # Convert pages to images (lazy import for optional dependency)
             convert_from_path = _get_convert_from_path()
@@ -170,4 +171,4 @@ class PdfProcessor(BaseDocumentProcessor):
             raise
         except Exception as e:
             logger.exception("Failed to extract PDF content")
-            raise ProcessingError(f"Failed to extract PDF content: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract PDF content: {e!s}") from e

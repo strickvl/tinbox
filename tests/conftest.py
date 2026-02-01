@@ -1,6 +1,5 @@
 """Pytest configuration and fixtures for tinbox tests."""
 
-import sys
 import pytest
 import structlog
 from rich.console import Console
@@ -28,10 +27,12 @@ def reset_logging_and_console():
 
     # Reconfigure structlog with fresh stderr reference
     from tinbox.utils.logging import configure_logging
+
     configure_logging()
 
     # Reset the CLI module's console and logger with fresh instances
     import tinbox.cli
+
     tinbox.cli.console = Console(force_terminal=False)
     tinbox.cli.logger = structlog.get_logger()
 
@@ -40,8 +41,10 @@ def reset_logging_and_console():
     # Clean up after test - recreate fresh instances
     structlog.reset_defaults()
     from tinbox.utils.logging import configure_logging
+
     configure_logging()
 
     import tinbox.cli
+
     tinbox.cli.console = Console(force_terminal=False)
     tinbox.cli.logger = structlog.get_logger()

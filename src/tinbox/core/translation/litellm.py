@@ -1,20 +1,19 @@
 """LiteLLM-based translation implementation."""
 
 import base64
-from datetime import datetime
-from typing import Union
 import io
 import json
-from PIL import Image
+from datetime import datetime
 
 from litellm import completion, completion_cost
 from litellm.exceptions import RateLimitError
+from PIL import Image
 from tenacity import (
+    before_sleep_log,
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
-    before_sleep_log,
 )
 
 from tinbox.core.translation.interface import (
@@ -25,9 +24,9 @@ from tinbox.core.translation.interface import (
     TranslationWithGlossaryResponse,
     TranslationWithoutGlossaryResponse,
 )
-from tinbox.core.types import ModelType, GlossaryEntry
+from tinbox.core.types import GlossaryEntry, ModelType
 from tinbox.utils.chunks import extract_whitespace_formatting
-from tinbox.utils.language import validate_language_pair, LanguageError
+from tinbox.utils.language import LanguageError, validate_language_pair
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -144,10 +143,12 @@ class LiteLLMTranslator(ModelInterface):
 
         # Add context if provided (with tag-based notation)
         if request.context:
-            messages.append({
-                "role": "user",
-                "content": f"[TRANSLATION_CONTEXT]{request.context}[/TRANSLATION_CONTEXT]"
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": f"[TRANSLATION_CONTEXT]{request.context}[/TRANSLATION_CONTEXT]",
+                }
+            )
 
         # Add glossary context if available
         if request.glossary:
@@ -192,15 +193,13 @@ class LiteLLMTranslator(ModelInterface):
                     ],
                 }
             )
-        
+
         logger.debug("Messages: ", messages=messages)
 
         return messages
 
     @completion_with_retry
-    async def _make_completion_request(
-        self, request: TranslationRequest
-    ):
+    async def _make_completion_request(self, request: TranslationRequest):
         """Make a completion request with retry logic for rate limits.
 
         Args:
@@ -219,16 +218,18 @@ class LiteLLMTranslator(ModelInterface):
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
                 stream=False,
-                response_format=TranslationWithGlossaryResponse if request.glossary else TranslationWithoutGlossaryResponse,
+                response_format=TranslationWithGlossaryResponse
+                if request.glossary
+                else TranslationWithoutGlossaryResponse,
                 reasoning_effort=request.reasoning_effort,
                 drop_params=True,
                 **{k: v for k, v in request.model_params.items() if k != "model_name"},
             )
-        except RateLimitError as e:
+        except RateLimitError:
             # This will be caught by the retry decorator
             raise
         except Exception as e:
-            raise TranslationError(f"Translation failed: {str(e)}") from e
+            raise TranslationError(f"Translation failed: {e!s}") from e
 
     async def translate(
         self,
@@ -256,7 +257,7 @@ class LiteLLMTranslator(ModelInterface):
 
                 end_time = datetime.now()
                 time_taken = (end_time - start_time).total_seconds()
-                
+
                 return TranslationResponse(
                     text=request.content if isinstance(request.content, str) else "",
                     tokens_used=0,
@@ -265,7 +266,9 @@ class LiteLLMTranslator(ModelInterface):
                 )
 
             # Extract whitespace from content
-            content_prefix, clean_content, content_suffix = extract_whitespace_formatting(request.content)
+            content_prefix, clean_content, content_suffix = (
+                extract_whitespace_formatting(request.content)
+            )
 
             logger.debug("Content prefix: ", prefix=content_prefix)
             logger.debug("Content suffix: ", suffix=content_suffix)
@@ -301,43 +304,60 @@ class LiteLLMTranslator(ModelInterface):
 
             # Handle translation with whitespace restoration
             try:
-                logger.debug(f"Making completion request", request=clean_request)
+                logger.debug("Making completion request", request=clean_request)
 
                 response = await self._make_completion_request(clean_request)
-                
-                logger.debug(f"Completion request made", response=response)
+
+                logger.debug("Completion request made", response=response)
 
                 if not hasattr(response, "choices") or not response.choices:
                     raise TranslationError("No response from model")
 
-                if not hasattr(response.choices[0], "finish_reason") or not response.choices[0].finish_reason == "stop":
-                    raise TranslationError(f"Invalid finish reason from model: {response.choices[0].finish_reason}, expected 'stop'")
+                if (
+                    not hasattr(response.choices[0], "finish_reason")
+                    or not response.choices[0].finish_reason == "stop"
+                ):
+                    raise TranslationError(
+                        f"Invalid finish reason from model: {response.choices[0].finish_reason}, expected 'stop'"
+                    )
 
                 # Require structured response - parse JSON from content
                 text: str
                 glossary_updates = []
-                
-                if not hasattr(response.choices[0], "message") or not response.choices[0].message.content:
-                    raise TranslationError("Invalid response format: missing message content")
-                
+
+                if (
+                    not hasattr(response.choices[0], "message")
+                    or not response.choices[0].message.content
+                ):
+                    raise TranslationError(
+                        "Invalid response format: missing message content"
+                    )
+
                 try:
                     parsed_content = json.loads(response.choices[0].message.content)
                 except (json.JSONDecodeError, AttributeError) as e:
-                    raise TranslationError(f"Invalid JSON response format: {str(e)}")
-                
-                if not isinstance(parsed_content, dict) or "translation" not in parsed_content:
+                    raise TranslationError(f"Invalid JSON response format: {e!s}")
+
+                if (
+                    not isinstance(parsed_content, dict)
+                    or "translation" not in parsed_content
+                ):
                     raise TranslationError("Missing translation field in JSON response")
-                
+
                 text = parsed_content["translation"]
-                
+
                 # Parse glossary updates if present
-                if "glossary_extension" in parsed_content and parsed_content["glossary_extension"]:
+                if parsed_content.get("glossary_extension"):
                     glossary_data = parsed_content["glossary_extension"]
                     if isinstance(glossary_data, list):
                         glossary_updates = [
-                            GlossaryEntry(term=entry["term"], translation=entry["translation"])
+                            GlossaryEntry(
+                                term=entry["term"], translation=entry["translation"]
+                            )
                             for entry in glossary_data
-                            if isinstance(entry, dict) and "term" in entry and "translation" in entry
+                            if isinstance(entry, dict)
+                            and "term" in entry
+                            and "translation" in entry
                         ]
 
                 if not text or not text.strip():
@@ -345,10 +365,13 @@ class LiteLLMTranslator(ModelInterface):
 
                 # Get actual token usage from LiteLLM response
                 tokens = getattr(response.usage, "total_tokens", 0)
-                
+
                 # Get actual cost from LiteLLM response
                 cost = 0.0
-                if hasattr(response, "_hidden_params") and "response_cost" in response._hidden_params:
+                if (
+                    hasattr(response, "_hidden_params")
+                    and "response_cost" in response._hidden_params
+                ):
                     cost = response._hidden_params["response_cost"]
                 else:
                     # Fallback: calculate cost using LiteLLM's completion_cost function
@@ -357,7 +380,7 @@ class LiteLLMTranslator(ModelInterface):
                     except Exception:
                         # If all else fails, cost remains 0.0
                         pass
-                
+
                 # Calculate time taken
                 time_taken = (datetime.now() - start_time).total_seconds()
 
@@ -377,16 +400,16 @@ class LiteLLMTranslator(ModelInterface):
             except TranslationError:
                 raise
             except Exception as e:
-                self._logger.error(f"Translation failed: {str(e)}")
-                raise TranslationError(f"Translation failed: {str(e)}") from e
+                self._logger.error(f"Translation failed: {e!s}")
+                raise TranslationError(f"Translation failed: {e!s}") from e
 
         except TranslationError:
             # Re-raise TranslationError without wrapping
             raise
         except Exception as e:
             # Catch any remaining errors
-            self._logger.error(f"Translation failed: {str(e)}")
-            raise TranslationError(f"Translation failed: {str(e)}") from e
+            self._logger.error(f"Translation failed: {e!s}")
+            raise TranslationError(f"Translation failed: {e!s}") from e
 
     async def validate_model(self) -> bool:
         """Verify the model is available and properly configured.
@@ -403,5 +426,5 @@ class LiteLLMTranslator(ModelInterface):
             )
             return hasattr(response, "choices") and len(response.choices) > 0
         except Exception as e:
-            self._logger.error(f"Model validation failed: {str(e)}")
+            self._logger.error(f"Model validation failed: {e!s}")
             return False

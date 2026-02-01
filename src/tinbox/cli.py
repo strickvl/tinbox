@@ -7,8 +7,15 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, MofNCompleteColumn, TimeElapsedColumn, TimeRemainingColumn
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 
 from tinbox.core import (
@@ -18,21 +25,21 @@ from tinbox.core import (
     TranslationResult,
     translate_document,
 )
-from tinbox.core.translation.checkpoint import CheckpointManager
 from tinbox.core.cost import estimate_cost
-from tinbox.core.processor import load_document
-from tinbox.core.translation import create_translator
-from tinbox.core.translation.glossary import GlossaryManager
+from tinbox.core.doctor import run_doctor_checks
 from tinbox.core.output import (
     OutputFormat,
     TranslationMetadata,
     TranslationOutput,
     create_handler,
 )
-from tinbox.core.doctor import run_doctor_checks
-from tinbox.utils.language import validate_language_pair, LanguageError
-from tinbox.utils.logging import configure_logging, get_logger
+from tinbox.core.processor import load_document
 from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn
+from tinbox.core.translation import create_translator
+from tinbox.core.translation.checkpoint import CheckpointManager
+from tinbox.core.translation.glossary import GlossaryManager
+from tinbox.utils.language import LanguageError, validate_language_pair
+from tinbox.utils.logging import configure_logging, get_logger
 
 app = typer.Typer(
     name="tinbox",
@@ -88,7 +95,12 @@ def display_cost_estimate(estimate, model: ModelType) -> None:
     table.add_row("Estimated Tokens", f"{estimate.estimated_tokens:,}")
     if model != ModelType.OLLAMA:
         table.add_row("Estimated Cost", f"${estimate.estimated_cost:.2f}")
-    table.add_row("Estimated Time", f"{estimate.estimated_time / 60:.1f} minutes" if estimate.estimated_time > 60 else "<1 minute")
+    table.add_row(
+        "Estimated Time",
+        f"{estimate.estimated_time / 60:.1f} minutes"
+        if estimate.estimated_time > 60
+        else "<1 minute",
+    )
     table.add_row("Cost Level", estimate.cost_level.value.title())
 
     console.print(table)
@@ -268,7 +280,9 @@ def translate(
         # Auto-select algorithm based on file type, or validate user's choice
         if algorithm is None:
             # Auto-select: PDF needs 'page' algorithm, text files use 'context-aware'
-            effective_algorithm = "page" if file_type == FileType.PDF else "context-aware"
+            effective_algorithm = (
+                "page" if file_type == FileType.PDF else "context-aware"
+            )
         else:
             effective_algorithm = algorithm
             # Validate: PDF files only work with 'page' algorithm
@@ -330,7 +344,9 @@ def translate(
 
         # Load document (pass DPI setting for PDF files)
         processor_settings = {"dpi": pdf_dpi} if file_type == FileType.PDF else None
-        content = asyncio.run(load_document(input_file, processor_settings=processor_settings))
+        content = asyncio.run(
+            load_document(input_file, processor_settings=processor_settings)
+        )
 
         # Initialize model interface
         translator = create_translator(config)
@@ -434,7 +450,7 @@ def translate(
 
     except Exception as e:
         logger.exception("Translation failed")
-        console.print(f"[red]Error: {str(e)}[/red]")
+        console.print(f"[red]Error: {e!s}[/red]")
         sys.exit(1)
 
 

@@ -1,6 +1,5 @@
 """Tests for context-aware translation algorithm."""
 
-from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -325,10 +324,10 @@ class TestBuildTranslationContextInfo:
 
         assert context is not None
         assert next_chunk in context
-        
+
         # Verify multiline content is preserved in next chunk
         assert "Line 1\nLine 2\nLine 3" in context
-        
+
         # Check that content is properly enclosed in tags
         next_start = context.find("[NEXT_CHUNK]") + len("[NEXT_CHUNK]")
         next_end = context.find("[/NEXT_CHUNK]")
@@ -359,7 +358,9 @@ class TestBuildTranslationContextInfo:
         prev_source_content = context[prev_source_start:prev_source_end].strip()
         assert prev_source_content == "Previous text"
 
-        prev_trans_start = context.find("[PREVIOUS_CHUNK_TRANSLATION]") + len("[PREVIOUS_CHUNK_TRANSLATION]")
+        prev_trans_start = context.find("[PREVIOUS_CHUNK_TRANSLATION]") + len(
+            "[PREVIOUS_CHUNK_TRANSLATION]"
+        )
         prev_trans_end = context.find("[/PREVIOUS_CHUNK_TRANSLATION]")
         prev_trans_content = context[prev_trans_start:prev_trans_end].strip()
         assert prev_trans_content == "Texto anterior"
@@ -392,11 +393,11 @@ class TestTranslateContextAware:
 
         # Should have one translation call
         assert mock_translator.translate.call_count == 1
-        
+
         # Verify the call was made with proper structure
         call_args = mock_translator.translate.call_args[0][0]
         assert call_args.content == "Short text that fits in one chunk."
-        
+
         # Should not have context for first chunk
         assert call_args.context is None
 
@@ -411,7 +412,9 @@ class TestTranslateContextAware:
     ):
         """Test translating content that requires multiple chunks."""
         # Create content that will definitely be split into multiple chunks
-        long_content = "This is the first sentence. " * 10 + "This is the second sentence. " * 10
+        long_content = (
+            "This is the first sentence. " * 10 + "This is the second sentence. " * 10
+        )
         content = DocumentContent(
             pages=[long_content],
             content_type="text/plain",
@@ -454,10 +457,8 @@ class TestTranslateContextAware:
         self, context_aware_config, mock_translator, mock_checkpoint_manager
     ):
         """Test translation with custom split token."""
-        config = context_aware_config.model_copy(
-            update={"custom_split_token": "|||"}
-        )
-        
+        config = context_aware_config.model_copy(update={"custom_split_token": "|||"})
+
         content = DocumentContent(
             pages=["First part|||Second part|||Third part"],
             content_type="text/plain",
@@ -491,7 +492,9 @@ class TestTranslateContextAware:
     ):
         """Test translation with checkpoint saving."""
         content = DocumentContent(
-            pages=["Content that will be split into multiple chunks for testing checkpointing functionality."],
+            pages=[
+                "Content that will be split into multiple chunks for testing checkpointing functionality."
+            ],
             content_type="text/plain",
             metadata={},
         )
@@ -545,7 +548,7 @@ class TestTranslateContextAware:
                 cost=0.01,
                 time_taken=0.1,
             )
-        
+
         mock_translator.translate = AsyncMock(side_effect=mock_context_translate)
 
         result = await translate_context_aware(
@@ -576,7 +579,10 @@ class TestTranslateContextAware:
             metadata={},
         )
 
-        with pytest.raises(TranslationError, match="Context-aware algorithm not supported for image content"):
+        with pytest.raises(
+            TranslationError,
+            match="Context-aware algorithm not supported for image content",
+        ):
             await translate_context_aware(
                 content,
                 context_aware_config,
@@ -589,7 +595,9 @@ class TestTranslateContextAware:
         """Test handling of translation errors."""
         # Create a translator that always fails
         failing_translator = AsyncMock(spec=ModelInterface)
-        failing_translator.translate.side_effect = TranslationError("Translation failed")
+        failing_translator.translate.side_effect = TranslationError(
+            "Translation failed"
+        )
 
         content = DocumentContent(
             pages=["Test content"],
@@ -610,7 +618,11 @@ class TestTranslateContextAware:
     ):
         """Test translation with multiple pages."""
         content = DocumentContent(
-            pages=["First page content.", "Second page content.", "Third page content."],
+            pages=[
+                "First page content.",
+                "Second page content.",
+                "Third page content.",
+            ],
             content_type="text/plain",
             metadata={},
         )

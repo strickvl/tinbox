@@ -12,7 +12,7 @@ from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn, format_
 def test_current_cost_column_render():
     """Test CurrentCostColumn rendering."""
     column = CurrentCostColumn()
-    
+
     # Test with zero cost
     task = MagicMock(spec=Task)
     task.fields = {}
@@ -20,13 +20,13 @@ def test_current_cost_column_render():
     assert isinstance(result, Text)
     assert "$0.0000" in str(result)
     assert result.style == "dim"
-    
+
     # Test with positive cost
     task.fields = {"total_cost": 0.1234}
     result = column.render(task)
     assert "$0.1234" in str(result)
     assert result.style == "yellow"
-    
+
     # Test with missing cost field
     task.fields = {"other_field": "value"}
     result = column.render(task)
@@ -37,7 +37,7 @@ def test_current_cost_column_render():
 def test_estimated_cost_column_render():
     """Test EstimatedCostColumn rendering."""
     column = EstimatedCostColumn()
-    
+
     # Test with no progress
     task = MagicMock(spec=Task)
     task.fields = {"total_cost": 0.05}
@@ -46,20 +46,20 @@ def test_estimated_cost_column_render():
     result = column.render(task)
     assert "$-.----" in str(result)
     assert result.style == "dim"
-    
+
     # Test with progress
     task.completed = 2  # 20% complete
     result = column.render(task)
     # Should estimate 0.05 / 0.2 = 0.25 total cost
     assert "$0.2500" in str(result)
     assert result.style == "cyan"
-    
+
     # Test with no total
     task.total = None
     result = column.render(task)
     assert "$-.----" in str(result)
     assert result.style == "dim"
-    
+
     # Test with zero total
     task.total = 0
     result = column.render(task)
@@ -71,7 +71,7 @@ def test_estimated_cost_column_edge_cases():
     """Test EstimatedCostColumn edge cases."""
     column = EstimatedCostColumn()
     task = MagicMock(spec=Task)
-    
+
     # Test with missing cost field
     task.fields = {}
     task.total = 10
@@ -79,7 +79,7 @@ def test_estimated_cost_column_edge_cases():
     result = column.render(task)
     assert "$-.----" in str(result)
     assert result.style == "dim"
-    
+
     # Test with 100% completion
     task.fields = {"total_cost": 0.1}
     task.total = 10

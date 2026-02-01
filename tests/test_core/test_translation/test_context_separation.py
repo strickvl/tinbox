@@ -13,7 +13,7 @@ class TestTranslationRequestWithContext:
     def test_translation_request_with_context(self):
         """Test creating TranslationRequest with context."""
         context_info = "[PREVIOUS_CHUNK]\nPrevious text\n[/PREVIOUS_CHUNK]\n\n[PREVIOUS_CHUNK_TRANSLATION]\nTexto anterior\n[/PREVIOUS_CHUNK_TRANSLATION]"
-        
+
         request = TranslationRequest(
             source_lang="en",
             target_lang="es",
@@ -78,7 +78,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk="Previous text",
-            previous_translation="Texto anterior"
+            previous_translation="Texto anterior",
         )
 
         assert context is not None
@@ -96,15 +96,15 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="fr",
             previous_chunk="Hello world",
-            previous_translation="Bonjour le monde"
+            previous_translation="Bonjour le monde",
         )
 
         expected_parts = [
             "[PREVIOUS_CHUNK]\nHello world\n[/PREVIOUS_CHUNK]",
             "[PREVIOUS_CHUNK_TRANSLATION]\nBonjour le monde\n[/PREVIOUS_CHUNK_TRANSLATION]",
-            "Use this context to maintain consistency in terminology and style."
+            "Use this context to maintain consistency in terminology and style.",
         ]
-        
+
         for part in expected_parts:
             assert part in context
 
@@ -115,7 +115,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk=None,
-            previous_translation="Texto anterior"
+            previous_translation="Texto anterior",
         )
         assert context is None
 
@@ -124,7 +124,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk="Previous text",
-            previous_translation=None
+            previous_translation=None,
         )
         assert context is None
 
@@ -133,7 +133,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk=None,
-            previous_translation=None
+            previous_translation=None,
         )
         assert context is None
 
@@ -144,7 +144,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk="",
-            previous_translation="Texto anterior"
+            previous_translation="Texto anterior",
         )
         assert context is None
 
@@ -153,7 +153,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk="Previous text",
-            previous_translation=""
+            previous_translation="",
         )
         assert context is None
 
@@ -162,7 +162,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk="",
-            previous_translation=""
+            previous_translation="",
         )
         assert context is None
 
@@ -172,7 +172,7 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk="Sample text",
-            previous_translation="Texto de muestra"
+            previous_translation="Texto de muestra",
         )
 
         # Check tag structure
@@ -187,7 +187,9 @@ class TestBuildTranslationContextInfo:
         source_content = context[source_start:source_end].strip()
         assert source_content == "Sample text"
 
-        trans_start = context.find("[PREVIOUS_CHUNK_TRANSLATION]") + len("[PREVIOUS_CHUNK_TRANSLATION]")
+        trans_start = context.find("[PREVIOUS_CHUNK_TRANSLATION]") + len(
+            "[PREVIOUS_CHUNK_TRANSLATION]"
+        )
         trans_end = context.find("[/PREVIOUS_CHUNK_TRANSLATION]")
         trans_content = context[trans_start:trans_end].strip()
         assert trans_content == "Texto de muestra"
@@ -201,13 +203,13 @@ class TestBuildTranslationContextInfo:
             source_lang="en",
             target_lang="es",
             previous_chunk=previous_chunk,
-            previous_translation=previous_translation
+            previous_translation=previous_translation,
         )
 
         assert context is not None
         assert previous_chunk in context
         assert previous_translation in context
-        
+
         # Verify multiline content is preserved
         assert "Line 1\nLine 2\nLine 3" in context
         assert "Línea 1\nLínea 2\nLínea 3" in context
@@ -216,11 +218,9 @@ class TestBuildTranslationContextInfo:
         """Test the new next chunk functionality."""
         # Test with only next chunk (first chunk scenario)
         context = build_translation_context_info(
-            source_lang="en",
-            target_lang="es",
-            next_chunk="Next chunk content"
+            source_lang="en", target_lang="es", next_chunk="Next chunk content"
         )
-        
+
         assert context is not None
         assert "[NEXT_CHUNK]" in context
         assert "Next chunk content" in context
@@ -235,9 +235,9 @@ class TestBuildTranslationContextInfo:
             target_lang="es",
             previous_chunk="Previous text",
             previous_translation="Texto anterior",
-            next_chunk="Next text"
+            next_chunk="Next text",
         )
-        
+
         assert context is not None
         # Check all context types are present
         assert "[PREVIOUS_CHUNK]" in context
@@ -257,9 +257,9 @@ class TestBuildTranslationContextInfo:
             target_lang="es",
             previous_chunk="Previous text",
             previous_translation="Texto anterior",
-            next_chunk=""
+            next_chunk="",
         )
-        
+
         assert context is not None
         # Should only have previous context, not next
         assert "[PREVIOUS_CHUNK]" in context
@@ -273,9 +273,9 @@ class TestBuildTranslationContextInfo:
             target_lang="es",
             previous_chunk="Previous text",
             previous_translation=None,  # Missing translation
-            next_chunk="Next text"
+            next_chunk="Next text",
         )
-        
+
         assert context is not None
         # Should only have next context since previous is incomplete
         assert "[NEXT_CHUNK]" in context

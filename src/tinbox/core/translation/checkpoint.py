@@ -2,9 +2,8 @@
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime
 from pathlib import Path
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Any, Optional
 
 from tinbox.core.types import TranslationConfig
 from tinbox.utils.logging import get_logger
@@ -34,12 +33,12 @@ class ResumeResult:
     """Result of attempting to resume from checkpoint."""
 
     resumed: bool
-    translated_items: List[str]
+    translated_items: list[str]
     total_tokens: int
     total_cost: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     # Glossary state carried on resume
-    glossary_entries: Dict[str, str] = field(default_factory=dict)
+    glossary_entries: dict[str, str] = field(default_factory=dict)
 
 
 class CheckpointManager:
@@ -111,7 +110,7 @@ class CheckpointManager:
             )
 
         except Exception as e:
-            self._logger.error(f"Failed to save checkpoint: {str(e)}")
+            self._logger.error(f"Failed to save checkpoint: {e!s}")
             raise
 
     async def load(self) -> Optional[TranslationState]:
@@ -182,9 +181,8 @@ class CheckpointManager:
             return state
 
         except Exception as e:
-            self._logger.error(f"Failed to load checkpoint: {str(e)}")
+            self._logger.error(f"Failed to load checkpoint: {e!s}")
             return None
-
 
     async def cleanup_old_checkpoints(self, input_file: Path) -> None:
         """Clean up old checkpoint files for the given input file.
@@ -198,7 +196,7 @@ class CheckpointManager:
                 checkpoint_path.unlink()
                 self._logger.debug(f"Cleaned up checkpoint file: {checkpoint_path}")
         except Exception as e:
-            self._logger.error(f"Failed to clean up checkpoint: {str(e)}")
+            self._logger.error(f"Failed to clean up checkpoint: {e!s}")
             # Don't raise - cleanup failure shouldn't stop the translation
 
 
@@ -237,15 +235,15 @@ async def load_checkpoint(config: TranslationConfig) -> Optional[TranslationStat
 async def resume_from_checkpoint(
     checkpoint_manager: Optional[CheckpointManager],
     config: TranslationConfig,
-    chunks: Optional[List[str]] = None,
+    chunks: Optional[list[str]] = None,
 ) -> ResumeResult:
     """Attempt to resume translation from checkpoint.
-    
+
     Args:
         checkpoint_manager: The checkpoint manager instance
         config: Translation configuration
         chunks: Optional list of source chunks for context-aware algorithm
-        
+
     Returns:
         ResumeResult with resume status and loaded data
     """
@@ -258,10 +256,10 @@ async def resume_from_checkpoint(
             metadata={},
             glossary_entries={},
         )
-        
+
     logger.info("Checking for checkpoint")
     checkpoint = await checkpoint_manager.load()
-    
+
     if not checkpoint or not checkpoint.translated_chunks:
         return ResumeResult(
             resumed=False,
@@ -271,10 +269,12 @@ async def resume_from_checkpoint(
             metadata={},
             glossary_entries={},
         )
-        
-    logger.debug("Found valid checkpoint, resuming from saved state", checkpoint=checkpoint)
+
+    logger.debug(
+        "Found valid checkpoint, resuming from saved state", checkpoint=checkpoint
+    )
     logger.info("Found valid checkpoint, resuming from saved state")
-    
+
     # Load existing translated items in order
     # Checkpoint loading always converts string keys to integer keys
     translated_items = [
@@ -282,7 +282,7 @@ async def resume_from_checkpoint(
         for i in range(1, len(checkpoint.translated_chunks) + 1)
         if i in checkpoint.translated_chunks
     ]
-    
+
     # Prepare algorithm-specific metadata
     metadata = {
         # Include translated_chunks for algorithms that need page-number mapping
@@ -304,8 +304,6 @@ async def resume_from_checkpoint(
         metadata=metadata,
         glossary_entries=getattr(checkpoint, "glossary_entries", {}),
     )
-    
+
     logger.info(f"Resumed with {len(translated_items)} completed items")
     return result
-
-
