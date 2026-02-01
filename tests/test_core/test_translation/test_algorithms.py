@@ -193,9 +193,9 @@ async def test_translate_sliding_window_with_checkpointing(
     print(f"Translation calls: {translation_calls}")
 
     # Verify we got at least two translation calls
-    assert len(translation_calls) >= 2, (
-        f"Expected at least 2 translation calls, got {len(translation_calls)}"
-    )
+    assert (
+        len(translation_calls) >= 2
+    ), f"Expected at least 2 translation calls, got {len(translation_calls)}"
 
     # Verify checkpoint was saved
     assert mock_checkpoint_manager.save.called, "Checkpoint manager save was not called"

@@ -1,8 +1,10 @@
 """Core data types for the Tinbox translation tool."""
 
+from __future__ import annotations
+
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,20 +38,20 @@ class TranslationConfig(BaseModel):
     )
     algorithm: Literal["page", "sliding-window", "context-aware"]
     input_file: Path
-    output_file: Optional[Path] = None
+    output_file: Path | None = None
 
     # UI and progress settings
     verbose: bool = Field(
         default=False,
         description="Whether to show detailed progress information",
     )
-    progress_callback: Optional[Callable[[int], None]] = Field(
+    progress_callback: Callable[[int], None] | None = Field(
         default=None,
         description="Callback function to update progress (receives tokens processed)",
     )
 
     # Cost control settings
-    max_cost: Optional[float] = Field(
+    max_cost: float | None = Field(
         default=None,
         description="Maximum cost threshold in USD",
         ge=0.0,
@@ -72,18 +74,18 @@ class TranslationConfig(BaseModel):
     )
 
     # Context-aware algorithm specific settings
-    context_size: Optional[int] = Field(
+    context_size: int | None = Field(
         default=2000,
         gt=0,
         description="Target size for context-aware chunks (characters)",
     )
-    custom_split_token: Optional[str] = Field(
+    custom_split_token: str | None = Field(
         default=None,
         description="Custom token to split text on (context-aware only, ignores context_size)",
     )
 
     # Checkpoint settings
-    checkpoint_dir: Optional[Path] = Field(
+    checkpoint_dir: Path | None = Field(
         default=None,
         description="Directory to store checkpoints",
     )
@@ -163,7 +165,7 @@ class Glossary(BaseModel):
         description="Mapping from source terms to target translations",
     )
 
-    def extend(self, new_entries: list[GlossaryEntry]) -> "Glossary":
+    def extend(self, new_entries: list[GlossaryEntry]) -> Glossary:
         """Extend glossary with multiple entries and return new instance."""
         if not new_entries:
             return Glossary(entries=self.entries.copy())

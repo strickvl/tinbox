@@ -1,9 +1,10 @@
 """Command-line interface for Tinbox."""
 
+from __future__ import annotations
+
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -61,7 +62,7 @@ def version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
-    version: Optional[bool] = typer.Option(
+    version: bool | None = typer.Option(
         None,
         "--version",
         "-v",
@@ -149,7 +150,7 @@ def translate(
         dir_okay=False,
         resolve_path=True,
     ),
-    output_file: Optional[Path] = typer.Option(
+    output_file: Path | None = typer.Option(
         None,
         "--output",
         "-o",
@@ -179,18 +180,18 @@ def translate(
         "-m",
         help="Model to use (e.g., 'openai:gpt-4o', 'anthropic:claude-3-sonnet', 'ollama:mistral-small').",
     ),
-    algorithm: Optional[str] = typer.Option(
+    algorithm: str | None = typer.Option(
         None,
         "--algorithm",
         "-a",
         help="Translation algorithm: 'page', 'sliding-window', or 'context-aware'. Auto-selects based on file type if not specified (PDF→page, text→context-aware).",
     ),
-    context_size: Optional[int] = typer.Option(
+    context_size: int | None = typer.Option(
         2000,
         "--context-size",
         help="Target chunk size for context-aware algorithm (characters).",
     ),
-    custom_split_token: Optional[str] = typer.Option(
+    custom_split_token: str | None = typer.Option(
         None,
         "--split-token",
         help="Custom token to split text on (context-aware only).",
@@ -205,7 +206,7 @@ def translate(
         "--force",
         help="Skip warnings and proceed with translation.",
     ),
-    max_cost: Optional[float] = typer.Option(
+    max_cost: float | None = typer.Option(
         None,
         "--max-cost",
         help="Maximum cost threshold in USD.",
@@ -215,7 +216,7 @@ def translate(
         "--verbose",
         help="Show detailed progress information.",
     ),
-    checkpoint_dir: Optional[Path] = typer.Option(
+    checkpoint_dir: Path | None = typer.Option(
         None,
         "--checkpoint-dir",
         help="Directory to store translation checkpoints for resuming interrupted translations.",
@@ -230,12 +231,12 @@ def translate(
         "--glossary",
         help="Enable glossary for consistent term translations.",
     ),
-    glossary_file: Optional[Path] = typer.Option(
+    glossary_file: Path | None = typer.Option(
         None,
         "--glossary-file",
         help="Path to existing glossary file (JSON format) to load initial terms from.",
     ),
-    save_glossary: Optional[Path] = typer.Option(
+    save_glossary: Path | None = typer.Option(
         None,
         "--save-glossary",
         help="Path to save the updated glossary after translation.",

@@ -1,8 +1,9 @@
 """Text document processor implementation."""
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Union
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
@@ -118,7 +119,7 @@ class TextProcessor(BaseDocumentProcessor):
 
     async def extract_content(
         self, file_path: Path, *, start_page: int = 1, end_page: int | None = None
-    ) -> AsyncIterator[Union[str, bytes]]:
+    ) -> AsyncIterator[str | bytes]:
         """Extract content from a text document.
 
         Args:

@@ -1,8 +1,9 @@
 """Word document processor implementation."""
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Union
 from zipfile import BadZipFile
 
 from docx import Document
@@ -133,7 +134,7 @@ class WordProcessor(BaseDocumentProcessor):
         *,
         start_page: int = 1,
         end_page: int | None = None,
-    ) -> AsyncIterator[Union[str, bytes]]:
+    ) -> AsyncIterator[str | bytes]:
         """Extract content from the Word document.
 
         Since Word documents are treated as single text files, page parameters are ignored.

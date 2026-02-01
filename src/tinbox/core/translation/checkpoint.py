@@ -1,9 +1,11 @@
 """Checkpoint management for translation tasks."""
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from tinbox.core.types import TranslationConfig
 from tinbox.utils.logging import get_logger
@@ -113,7 +115,7 @@ class CheckpointManager:
             self._logger.error(f"Failed to save checkpoint: {e!s}")
             raise
 
-    async def load(self) -> Optional[TranslationState]:
+    async def load(self) -> TranslationState | None:
         """Load translation state from a checkpoint file.
 
         Returns:
@@ -216,7 +218,7 @@ def should_resume(config: TranslationConfig) -> bool:
     )
 
 
-async def load_checkpoint(config: TranslationConfig) -> Optional[TranslationState]:
+async def load_checkpoint(config: TranslationConfig) -> TranslationState | None:
     """Load translation state from checkpoint.
 
     Args:
@@ -233,9 +235,9 @@ async def load_checkpoint(config: TranslationConfig) -> Optional[TranslationStat
 
 
 async def resume_from_checkpoint(
-    checkpoint_manager: Optional[CheckpointManager],
+    checkpoint_manager: CheckpointManager | None,
     config: TranslationConfig,
-    chunks: Optional[list[str]] = None,
+    chunks: list[str] | None = None,
 ) -> ResumeResult:
     """Attempt to resume translation from checkpoint.
 

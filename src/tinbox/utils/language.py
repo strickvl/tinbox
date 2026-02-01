@@ -1,7 +1,8 @@
 """Language code handling and validation for Tinbox."""
 
+from __future__ import annotations
+
 from enum import Enum
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -94,7 +95,7 @@ class LanguageSupport(BaseModel):
 
     code: LanguageCode
     name: str
-    native_name: Optional[str] = None
+    native_name: str | None = None
     supported_models: list[str] = Field(default_factory=list)
     bidirectional: bool = True  # Whether the language can be both source and target
 

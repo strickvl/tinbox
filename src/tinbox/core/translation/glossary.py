@@ -1,8 +1,9 @@
 """Glossary management for translation tasks."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import Optional
 
 from tinbox.core.types import Glossary, GlossaryEntry
 from tinbox.utils.logging import get_logger
@@ -13,7 +14,7 @@ logger = get_logger(__name__)
 class GlossaryManager:
     """Manages glossary state and persistence during translation."""
 
-    def __init__(self, initial_glossary: Optional[Glossary] = None) -> None:
+    def __init__(self, initial_glossary: Glossary | None = None) -> None:
         self.current_glossary: Glossary = (
             initial_glossary if initial_glossary is not None else Glossary()
         )
@@ -50,7 +51,7 @@ class GlossaryManager:
             raise
 
     @classmethod
-    def load_from_file(cls, file_path: Path) -> "GlossaryManager":
+    def load_from_file(cls, file_path: Path) -> GlossaryManager:
         """Load glossary from a JSON file."""
         try:
             if not file_path.exists():

@@ -1,6 +1,8 @@
 """Translation interface definitions."""
 
-from typing import Literal, Optional, Protocol, Union
+from __future__ import annotations
+
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,16 +20,14 @@ class TranslationRequest(BaseModel):
 
     source_lang: str
     target_lang: str
-    content: Union[str, bytes]  # Pure content to translate (text or image bytes)
-    context: Optional[str] = (
-        None  # Supporting context information for better translation
-    )
+    content: str | bytes  # Pure content to translate (text or image bytes)
+    context: str | None = None  # Supporting context information for better translation
     content_type: str = Field(pattern=r"^(text|image)/.+$")
     model: ModelType
     model_params: dict = Field(
         default_factory=dict
     )  # Additional model-specific parameters
-    glossary: Optional[Glossary] = Field(
+    glossary: Glossary | None = Field(
         default=None,
         description="Optional glossary for consistent translations",
     )
@@ -100,7 +100,7 @@ class TranslationWithGlossaryResponse(BaseModel):
     """Structured LLM response when glossary is enabled."""
 
     translation: str = Field(description="The translated text")
-    glossary_extension: Optional[list[GlossaryEntry]] = Field(
+    glossary_extension: list[GlossaryEntry] | None = Field(
         default=None,
         description="New glossary entries discovered during translation (optional)",
     )

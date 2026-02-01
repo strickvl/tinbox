@@ -1,8 +1,9 @@
 """Translation algorithms for Tinbox."""
 
+from __future__ import annotations
+
 import re
 from datetime import datetime
-from typing import Optional
 
 from rich.progress import Progress, TaskID
 
@@ -31,8 +32,8 @@ class TranslationProgress:
     def __init__(
         self,
         total_pages: int,
-        progress: Optional[Progress] = None,
-        task_id: Optional[TaskID] = None,
+        progress: Progress | None = None,
+        task_id: TaskID | None = None,
     ) -> None:
         """Initialize translation progress tracking.
 
@@ -58,8 +59,8 @@ class TranslationProgress:
     def update(
         self,
         page_number: int,
-        response: Optional[TranslationResponse] = None,
-        error: Optional[Exception] = None,
+        response: TranslationResponse | None = None,
+        error: Exception | None = None,
     ) -> None:
         """Update progress with page results.
 
@@ -93,9 +94,9 @@ async def translate_document(
     content: DocumentContent,
     config: TranslationConfig,
     translator: ModelInterface,
-    progress: Optional[Progress] = None,
-    checkpoint_manager: Optional[CheckpointManager] = None,
-    glossary_manager: Optional[GlossaryManager] = None,
+    progress: Progress | None = None,
+    checkpoint_manager: CheckpointManager | None = None,
+    glossary_manager: GlossaryManager | None = None,
 ) -> TranslationResponse:
     """Translate a document using the specified algorithm.
 
@@ -147,9 +148,9 @@ async def translate_page_by_page(
     content: DocumentContent,
     config: TranslationConfig,
     translator: ModelInterface,
-    progress: Optional[Progress] = None,
-    checkpoint_manager: Optional[CheckpointManager] = None,
-    glossary_manager: Optional[GlossaryManager] = None,
+    progress: Progress | None = None,
+    checkpoint_manager: CheckpointManager | None = None,
+    glossary_manager: GlossaryManager | None = None,
 ) -> TranslationResponse:
     """Translate a document page by page.
 
@@ -170,7 +171,7 @@ async def translate_page_by_page(
     total_cost = 0.0
     # Use dict to track translations by actual page number (1-indexed)
     translated_pages_by_num: dict[int, str] = {}
-    task_id: Optional[TaskID] = None
+    task_id: TaskID | None = None
     start_time = datetime.now()
 
     try:
@@ -357,9 +358,9 @@ async def translate_sliding_window(
     content: DocumentContent,
     config: TranslationConfig,
     translator: ModelInterface,
-    progress: Optional[Progress] = None,
-    checkpoint_manager: Optional[CheckpointManager] = None,
-    glossary_manager: Optional[GlossaryManager] = None,
+    progress: Progress | None = None,
+    checkpoint_manager: CheckpointManager | None = None,
+    glossary_manager: GlossaryManager | None = None,
 ) -> TranslationResponse:
     """Translate a document using sliding window algorithm.
 
@@ -611,7 +612,7 @@ def merge_chunks(chunks: list[str], overlap_size: int) -> str:
 
 
 def smart_text_split(
-    text: str, target_size: int, custom_split_token: Optional[str] = None
+    text: str, target_size: int, custom_split_token: str | None = None
 ) -> list[str]:
     """Split text at natural boundaries or custom tokens.
 
@@ -719,10 +720,10 @@ def smart_text_split(
 def build_translation_context_info(
     source_lang: str,
     target_lang: str,
-    previous_chunk: Optional[str] = None,
-    previous_translation: Optional[str] = None,
-    next_chunk: Optional[str] = None,
-) -> Optional[str]:
+    previous_chunk: str | None = None,
+    previous_translation: str | None = None,
+    next_chunk: str | None = None,
+) -> str | None:
     """Build context information for translation consistency using tag-based notation.
 
     Args:
@@ -762,9 +763,9 @@ async def translate_context_aware(
     content: DocumentContent,
     config: TranslationConfig,
     translator: ModelInterface,
-    progress: Optional[Progress] = None,
-    checkpoint_manager: Optional[CheckpointManager] = None,
-    glossary_manager: Optional[GlossaryManager] = None,
+    progress: Progress | None = None,
+    checkpoint_manager: CheckpointManager | None = None,
+    glossary_manager: GlossaryManager | None = None,
 ) -> TranslationResponse:
     """Translate using context-aware algorithm with natural boundary splitting.
 
@@ -789,7 +790,7 @@ async def translate_context_aware(
     start_time = datetime.now()
     total_tokens = 0
     total_cost = 0.0
-    task_id: Optional[TaskID] = None
+    task_id: TaskID | None = None
 
     try:
         # Join all pages into single text
@@ -815,8 +816,8 @@ async def translate_context_aware(
         total_cost = resume_result.total_cost
 
         translated_chunks = resume_result.translated_items
-        previous_chunk: Optional[str] = resume_result.metadata.get("previous_chunk")
-        previous_translation: Optional[str] = resume_result.metadata.get(
+        previous_chunk: str | None = resume_result.metadata.get("previous_chunk")
+        previous_translation: str | None = resume_result.metadata.get(
             "previous_translation"
         )
 

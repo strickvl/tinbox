@@ -1,9 +1,10 @@
 """Cost estimation utilities."""
 
+from __future__ import annotations
+
 import math
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 from tinbox.core.types import FileType, ModelType
 
@@ -146,7 +147,7 @@ def estimate_cost(
     model: ModelType,
     *,
     algorithm: str = "page",
-    max_cost: Optional[float] = None,
+    max_cost: float | None = None,
     use_glossary: bool = False,
     reasoning_effort: str = "minimal",
 ) -> CostEstimate:

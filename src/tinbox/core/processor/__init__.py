@@ -1,5 +1,7 @@
 """Package initialization for document processors."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -16,7 +18,7 @@ logger = get_logger(__name__)
 class DocumentContent(BaseModel):
     """Represents a document ready for translation."""
 
-    pages: list[Union[str, bytes]]  # Individual pages for translation
+    pages: list[str | bytes]  # Individual pages for translation
     content_type: str = Field(pattern=r"^(text|image)/.+$")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -24,9 +26,7 @@ class DocumentContent(BaseModel):
 
     @field_validator("pages")
     @classmethod
-    def validate_pages_not_empty(
-        cls, v: list[Union[str, bytes]]
-    ) -> list[Union[str, bytes]]:
+    def validate_pages_not_empty(cls, v: list[str | bytes]) -> list[str | bytes]:
         """Validate that pages list is not empty."""
         if not v:
             raise ValueError("Pages cannot be empty")
@@ -75,7 +75,7 @@ class DocumentProcessor(Protocol):
 
     async def extract_content(
         self, file_path: Path, *, start_page: int = 1, end_page: int | None = None
-    ) -> AsyncIterator[Union[str, bytes]]:
+    ) -> AsyncIterator[str | bytes]:
         """Extract content from a document.
 
         Args:
