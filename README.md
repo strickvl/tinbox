@@ -102,6 +102,8 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 
 ### Basic Installation
 
+**Requires Python 3.12 or higher.**
+
 ```bash
 # Recommended: Install with all features (PDF, DOCX, image processing)
 pip install -e ".[all]"

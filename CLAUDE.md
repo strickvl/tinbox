@@ -26,7 +26,7 @@ Use `tinbox --help` to see all available options. Examples:
 
 ## Coding Style & Naming Conventions
 
-- Python 3.9+ with src-layout imports (`src/tinbox/...`)
+- Python 3.12+ with src-layout imports (`src/tinbox/...`)
 - Format with Black (line length 88) and sort imports with isort (Black profile)
 - Lint with Ruff; type-check with mypy (strict settings in `pyproject.toml`)
 - Naming: modules/functions `snake_case`, classes `PascalCase`, constants `UPPER_CASE`
