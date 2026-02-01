@@ -1,7 +1,6 @@
 """Logging configuration for Tinbox."""
 
 import sys
-from typing import Optional
 
 import structlog
 from rich.console import Console
@@ -38,7 +37,7 @@ def configure_logging(level: str = "INFO", json: bool = False) -> None:
     )
 
 
-def get_logger(name: Optional[str] = None) -> structlog.BoundLogger:
+def get_logger(name: str | None = None) -> structlog.BoundLogger:
     """Get a logger instance.
 
     Args:

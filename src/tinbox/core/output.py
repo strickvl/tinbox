@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Protocol
 
 from pydantic import BaseModel, Field
 
@@ -49,7 +49,7 @@ class OutputHandler(Protocol):
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write the translation output.
 
@@ -66,7 +66,7 @@ class JSONOutputHandler:
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write translation output as JSON.
 
@@ -100,7 +100,7 @@ class TextOutputHandler:
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write translation output as plain text.
 
@@ -121,7 +121,7 @@ class MarkdownOutputHandler:
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write translation output as Markdown.
 

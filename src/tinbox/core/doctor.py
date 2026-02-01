@@ -13,8 +13,8 @@ class DoctorCheck(BaseModel):
     name: str
     category: str
     ok: bool
-    details: Optional[str] = None
-    hint: Optional[str] = None
+    details: str | None = None
+    hint: str | None = None
 
 
 class DoctorReport(BaseModel):
