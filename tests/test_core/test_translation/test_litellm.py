@@ -1,6 +1,5 @@
 """Tests for the LiteLLM translator."""
 
-import asyncio
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -255,7 +254,7 @@ async def test_timeout_handling(translator: LiteLLMTranslator, monkeypatch):
     """Test handling of network timeouts."""
 
     def mock_timeout(*args: Any, **kwargs: dict[str, Any]) -> Any:
-        raise asyncio.TimeoutError("Request timed out")
+        raise TimeoutError("Request timed out")
 
     import litellm
 
