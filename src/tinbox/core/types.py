@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class FileType(str, Enum):
+class FileType(StrEnum):
     """Supported file types for translation."""
 
     PDF = "pdf"
@@ -18,7 +18,7 @@ class FileType(str, Enum):
     TXT = "txt"
 
 
-class ModelType(str, Enum):
+class ModelType(StrEnum):
     """Supported LLM model providers."""
 
     OPENAI = "openai"  # OpenAI models (GPT-4, etc.)

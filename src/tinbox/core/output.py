@@ -2,7 +2,7 @@
 
 import json
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
@@ -14,7 +14,7 @@ from tinbox.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-class OutputFormat(str, Enum):
+class OutputFormat(StrEnum):
     """Supported output formats."""
 
     TEXT = "text"

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import math
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from tinbox.core.types import FileType, ModelType
 
 
-class CostLevel(str, Enum):
+class CostLevel(StrEnum):
     """Cost level classification."""
 
     LOW = "low"  # < $1
