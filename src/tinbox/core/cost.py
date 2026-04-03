@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import math
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from tinbox.core.types import FileType, ModelType
 
 
-class CostLevel(str, Enum):
+class CostLevel(StrEnum):
     """Cost level classification."""
 
     LOW = "low"  # < $1
@@ -35,6 +35,25 @@ MODEL_COSTS: dict[ModelType, tuple[float, float]] = {
     ),  # $0.00125 per 1K input tokens, $0.01 per 1K output tokens (Gemini 2.5 Pro)
     ModelType.OLLAMA: (0.0, 0.0),  # Free for local models
 }
+
+
+def calculate_usage_cost(
+    model: ModelType, input_tokens: int, output_tokens: int
+) -> float:
+    """Calculate actual cost from token usage using MODEL_COSTS.
+
+    Args:
+        model: Model provider type
+        input_tokens: Number of input/prompt tokens used
+        output_tokens: Number of output/completion tokens used
+
+    Returns:
+        Cost in USD
+    """
+    input_cost_per_1k, output_cost_per_1k = MODEL_COSTS.get(model, (0.0, 0.0))
+    return (input_tokens / 1000) * input_cost_per_1k + (
+        output_tokens / 1000
+    ) * output_cost_per_1k
 
 
 def estimate_document_tokens(file_path: Path) -> int:

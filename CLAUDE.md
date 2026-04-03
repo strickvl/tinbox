@@ -11,7 +11,8 @@
 
 - Use `uv pip install` instead of regular pip for package installation
 - Editable install with dev tooling: `uv pip install -e ".[dev]"`
-- Editable install with all extras (PDF/DOCX): `uv pip install -e ".[all]"`
+- Editable install with all extras (providers + PDF/DOCX): `uv pip install -e ".[all]"`
+- Provider extras: `uv pip install -e ".[openai]"` or `uv pip install -e ".[anthropic]"`
 
 ## Common Commands
 
@@ -49,4 +50,5 @@ Use `tinbox --help` to see all available options. Examples:
 
 ## Project-Specific Information
 
-- Pillow is required for image processing in the PDF processor and LiteLLM translator
+- Pillow is required for image processing in the PDF processor and translators
+- Translation uses direct OpenAI and Anthropic SDKs (no litellm). Ollama and Gemini are supported via OpenAI-compatible API endpoints.

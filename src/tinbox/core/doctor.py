@@ -30,7 +30,7 @@ class DoctorReport(BaseModel):
     @property
     def required_ok(self) -> bool:
         """Return True if all required checks passed (excludes optional API keys and local models)."""
-        optional_categories = {"API Keys", "Local Models"}
+        optional_categories = {"API Keys", "Local Models", "Model SDKs"}
         required_checks = [
             c for c in self.checks if c.category not in optional_categories
         ]
@@ -184,6 +184,50 @@ def check_google_key() -> DoctorCheck:
     )
 
 
+def check_openai_sdk() -> DoctorCheck:
+    """Check if the openai SDK is installed."""
+    try:
+        import openai
+
+        version = getattr(openai, "__version__", "unknown")
+        return DoctorCheck(
+            name="openai SDK",
+            category="Model SDKs",
+            ok=True,
+            details=f"Version {version}",
+        )
+    except ImportError:
+        return DoctorCheck(
+            name="openai SDK",
+            category="Model SDKs",
+            ok=False,
+            details="Not installed",
+            hint="Install with: pip install tinbox[openai] or pip install tinbox[all]",
+        )
+
+
+def check_anthropic_sdk() -> DoctorCheck:
+    """Check if the anthropic SDK is installed."""
+    try:
+        import anthropic
+
+        version = getattr(anthropic, "__version__", "unknown")
+        return DoctorCheck(
+            name="anthropic SDK",
+            category="Model SDKs",
+            ok=True,
+            details=f"Version {version}",
+        )
+    except ImportError:
+        return DoctorCheck(
+            name="anthropic SDK",
+            category="Model SDKs",
+            ok=False,
+            details="Not installed",
+            hint="Install with: pip install tinbox[anthropic] or pip install tinbox[all]",
+        )
+
+
 def check_ollama() -> DoctorCheck:
     """Check if Ollama is available."""
     ollama_path = shutil.which("ollama")
@@ -216,6 +260,9 @@ def run_doctor_checks() -> DoctorReport:
         check_pdf2image(),
         check_python_docx(),
         check_pillow(),
+        # Model SDKs
+        check_openai_sdk(),
+        check_anthropic_sdk(),
         # API keys
         check_openai_key(),
         check_anthropic_key(),

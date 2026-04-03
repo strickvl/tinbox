@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class LanguageCode(str, Enum):
+class LanguageCode(StrEnum):
     """ISO 639-1 language codes with common aliases."""
 
     ENGLISH = "en"

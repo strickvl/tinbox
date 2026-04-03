@@ -1,131 +1,173 @@
-"""Tests for reasoning effort functionality."""
+"""Tests for reasoning effort functionality across providers."""
 
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tinbox.core.translation.anthropic import AnthropicTranslator
 from tinbox.core.translation.interface import TranslationRequest
-from tinbox.core.translation.litellm import LiteLLMTranslator
+from tinbox.core.translation.openai import OpenAITranslator
 from tinbox.core.types import ModelType
 
 
-@pytest.fixture
-def translator():
-    """Create a LiteLLM translator for testing."""
-    return LiteLLMTranslator()
+def _mock_openai_response(
+    content: str = '{"translation": "Hola, mundo!"}',
+) -> MagicMock:
+    response = MagicMock()
+    response.choices = [MagicMock()]
+    response.choices[0].finish_reason = "stop"
+    response.choices[0].message = MagicMock()
+    response.choices[0].message.content = content
+    response.usage = MagicMock()
+    response.usage.total_tokens = 100
+    response.usage.prompt_tokens = 60
+    response.usage.completion_tokens = 40
+    return response
+
+
+def _mock_anthropic_response(
+    text: str = '{"translation": "Hola, mundo!"}',
+) -> MagicMock:
+    response = MagicMock()
+    text_block = MagicMock(type="text", text=text)
+    response.content = [text_block]
+    response.stop_reason = "end_turn"
+    response.usage = MagicMock(input_tokens=60, output_tokens=40)
+    return response
 
 
 @pytest.mark.asyncio
-async def test_reasoning_effort_passed_to_completion(translator: LiteLLMTranslator):
-    """Test that reasoning_effort is correctly passed to the completion call."""
+async def test_openai_reasoning_effort_passed():
+    """Test that reasoning_effort is passed to OpenAI SDK."""
+    translator = OpenAITranslator()
 
-    def mock_completion(*args: Any, **kwargs: dict[str, Any]) -> Any:
-        # Verify reasoning_effort is passed correctly
-        assert "reasoning_effort" in kwargs
-        assert kwargs["reasoning_effort"] == "high"
+    with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response()
+        )
+        mock_cls.return_value = mock_client
 
-        # Return a mock response
-        response = MagicMock()
-        response.choices = [MagicMock()]
-        response.choices[0].finish_reason = "stop"
-        response.choices[0].message = MagicMock()
-        response.choices[0].message.content = '{"translation": "Hola, mundo!"}'
-        response.usage = MagicMock()
-        response.usage.total_tokens = 100
-        response._hidden_params = {"response_cost": 0.01}
-        return response
-
-    with patch(
-        "tinbox.core.translation.litellm.completion", side_effect=mock_completion
-    ):
         request = TranslationRequest(
             source_lang="en",
             target_lang="es",
-            content="Hello, world!",
+            content="Hello!",
             context=None,
             content_type="text/plain",
             model=ModelType.OPENAI,
             model_params={"model_name": "gpt-4o"},
             reasoning_effort="high",
         )
+        await translator.translate(request)
 
-        response = await translator.translate(request)
-        assert response.text == "Hola, mundo!"
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["reasoning_effort"] == "high"
 
 
 @pytest.mark.asyncio
-async def test_reasoning_effort_default_minimal(translator: LiteLLMTranslator):
-    """Test that reasoning_effort defaults to minimal."""
+async def test_openai_reasoning_effort_minimal_omitted():
+    """Test that minimal reasoning_effort is not sent to OpenAI."""
+    translator = OpenAITranslator()
 
-    def mock_completion(*args: Any, **kwargs: dict[str, Any]) -> Any:
-        # Verify reasoning_effort defaults to minimal
-        assert "reasoning_effort" in kwargs
-        assert kwargs["reasoning_effort"] == "minimal"
+    with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response()
+        )
+        mock_cls.return_value = mock_client
 
-        # Return a mock response
-        response = MagicMock()
-        response.choices = [MagicMock()]
-        response.choices[0].finish_reason = "stop"
-        response.choices[0].message = MagicMock()
-        response.choices[0].message.content = '{"translation": "Hola, mundo!"}'
-        response.usage = MagicMock()
-        response.usage.total_tokens = 100
-        response._hidden_params = {"response_cost": 0.01}
-        return response
-
-    with patch(
-        "tinbox.core.translation.litellm.completion", side_effect=mock_completion
-    ):
         request = TranslationRequest(
             source_lang="en",
             target_lang="es",
-            content="Hello, world!",
+            content="Hello!",
             context=None,
             content_type="text/plain",
             model=ModelType.OPENAI,
             model_params={"model_name": "gpt-4o"},
-            # reasoning_effort not specified, should default to minimal
+            reasoning_effort="minimal",
         )
+        await translator.translate(request)
 
-        response = await translator.translate(request)
-        assert response.text == "Hola, mundo!"
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert "reasoning_effort" not in call_kwargs
 
 
-@pytest.mark.parametrize("effort", ["minimal", "low", "medium", "high"])
+@pytest.mark.parametrize("effort", ["low", "medium", "high"])
 @pytest.mark.asyncio
-async def test_reasoning_effort_all_values(translator: LiteLLMTranslator, effort):
-    """Test that all reasoning effort values are passed correctly."""
+async def test_openai_reasoning_effort_all_non_minimal(effort):
+    """Test that non-minimal effort values are passed through."""
+    translator = OpenAITranslator()
 
-    def mock_completion(*args: Any, **kwargs: dict[str, Any]) -> Any:
-        # Verify reasoning_effort is passed correctly
-        assert "reasoning_effort" in kwargs
-        assert kwargs["reasoning_effort"] == effort
+    with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_openai_response()
+        )
+        mock_cls.return_value = mock_client
 
-        # Return a mock response
-        response = MagicMock()
-        response.choices = [MagicMock()]
-        response.choices[0].finish_reason = "stop"
-        response.choices[0].message = MagicMock()
-        response.choices[0].message.content = '{"translation": "Hola, mundo!"}'
-        response.usage = MagicMock()
-        response.usage.total_tokens = 100
-        response._hidden_params = {"response_cost": 0.01}
-        return response
-
-    with patch(
-        "tinbox.core.translation.litellm.completion", side_effect=mock_completion
-    ):
         request = TranslationRequest(
             source_lang="en",
             target_lang="es",
-            content="Hello, world!",
+            content="Hello!",
             context=None,
             content_type="text/plain",
             model=ModelType.OPENAI,
             model_params={"model_name": "gpt-4o"},
             reasoning_effort=effort,
         )
+        await translator.translate(request)
 
-        response = await translator.translate(request)
-        assert response.text == "Hola, mundo!"
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["reasoning_effort"] == effort
+
+
+@pytest.mark.asyncio
+async def test_anthropic_reasoning_effort_maps_to_thinking():
+    """Test that reasoning_effort maps to Anthropic thinking config."""
+    translator = AnthropicTranslator()
+
+    with patch("tinbox.core.translation.anthropic.AsyncAnthropic") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=_mock_anthropic_response())
+        mock_cls.return_value = mock_client
+
+        request = TranslationRequest(
+            source_lang="en",
+            target_lang="es",
+            content="Hello!",
+            context=None,
+            content_type="text/plain",
+            model=ModelType.ANTHROPIC,
+            model_params={"model_name": "claude-3-sonnet"},
+            reasoning_effort="high",
+        )
+        await translator.translate(request)
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert call_kwargs["thinking"] == {"type": "enabled", "budget_tokens": 8192}
+
+
+@pytest.mark.asyncio
+async def test_anthropic_reasoning_effort_minimal_no_thinking():
+    """Test that minimal effort does not enable thinking for Anthropic."""
+    translator = AnthropicTranslator()
+
+    with patch("tinbox.core.translation.anthropic.AsyncAnthropic") as mock_cls:
+        mock_client = MagicMock()
+        mock_client.messages.create = AsyncMock(return_value=_mock_anthropic_response())
+        mock_cls.return_value = mock_client
+
+        request = TranslationRequest(
+            source_lang="en",
+            target_lang="es",
+            content="Hello!",
+            context=None,
+            content_type="text/plain",
+            model=ModelType.ANTHROPIC,
+            model_params={"model_name": "claude-3-sonnet"},
+            reasoning_effort="minimal",
+        )
+        await translator.translate(request)
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert "thinking" not in call_kwargs

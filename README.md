@@ -105,14 +105,21 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 **Requires Python 3.12 or higher.**
 
 ```bash
-# Recommended: Install with all features (PDF, DOCX, image processing)
+# Recommended: Install with all features (all providers + PDF + DOCX)
 pip install -e ".[all]"
 
-# Or install specific features
+# Or install specific providers
+pip install -e ".[openai]"      # OpenAI, Ollama, and Gemini support
+pip install -e ".[anthropic]"   # Anthropic Claude support
+
+# Or install specific document features
 pip install -e ".[pdf]"     # PDF support only
 pip install -e ".[docx]"    # Word document support only
-pip install tinbox          # Base package only
+pip install tinbox          # Base package only (no cloud providers)
 ```
+
+> **Note:** Ollama and Gemini are accessed via OpenAI-compatible APIs, so they require the `openai` extra.
+> For [OpenRouter](https://openrouter.ai), use `openai:model-name` with `OPENAI_BASE_URL=https://openrouter.ai/api/v1`.
 
 ### System Requirements
 
