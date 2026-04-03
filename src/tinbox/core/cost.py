@@ -37,6 +37,25 @@ MODEL_COSTS: dict[ModelType, tuple[float, float]] = {
 }
 
 
+def calculate_usage_cost(
+    model: ModelType, input_tokens: int, output_tokens: int
+) -> float:
+    """Calculate actual cost from token usage using MODEL_COSTS.
+
+    Args:
+        model: Model provider type
+        input_tokens: Number of input/prompt tokens used
+        output_tokens: Number of output/completion tokens used
+
+    Returns:
+        Cost in USD
+    """
+    input_cost_per_1k, output_cost_per_1k = MODEL_COSTS.get(model, (0.0, 0.0))
+    return (input_tokens / 1000) * input_cost_per_1k + (
+        output_tokens / 1000
+    ) * output_cost_per_1k
+
+
 def estimate_document_tokens(file_path: Path) -> int:
     """Estimate the number of tokens in a document.
 
