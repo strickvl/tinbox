@@ -1,7 +1,7 @@
 """Tests for document processing interfaces and base functionality."""
 
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator
 
 import pytest
 from pydantic import ValidationError

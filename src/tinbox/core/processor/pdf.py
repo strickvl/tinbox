@@ -1,11 +1,13 @@
 """PDF document processor implementation."""
 
+from __future__ import annotations
+
+import io
+import shutil
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Union
 
 import pypdf
-from pdf2image import convert_from_path
-import io
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
@@ -16,6 +18,39 @@ from tinbox.core.processor import (
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _get_convert_from_path():
+    """Lazily import pdf2image.convert_from_path with helpful error message."""
+    try:
+        from pdf2image import convert_from_path
+
+        return convert_from_path
+    except ImportError:
+        raise ProcessingError(
+            "pdf2image is not installed. PDF image conversion requires the PDF extras.\n\n"
+            "To install with PDF support, run:\n"
+            "  pip install tinbox[pdf]\n"
+            "or:\n"
+            "  uv pip install tinbox[pdf]\n\n"
+            "For full installation with all extras:\n"
+            "  pip install tinbox[all]"
+        )
+
+
+def _check_poppler_available() -> None:
+    """Check if poppler-utils is available on the system."""
+    if shutil.which("pdfinfo") is None:
+        raise ProcessingError(
+            "poppler-utils is not installed. PDF processing requires poppler-utils to be installed on your system.\n\n"
+            "Installation instructions:\n"
+            "- macOS: brew install poppler\n"
+            "- Ubuntu/Debian: sudo apt-get install poppler-utils\n"
+            "- CentOS/RHEL: sudo yum install poppler-utils\n"
+            "- Fedora: sudo dnf install poppler-utils\n"
+            "- Windows: Download from https://github.com/oschwartz10612/poppler-windows/releases/\n\n"
+            "For more details, see the README.md file."
+        )
 
 
 class PdfProcessor(BaseDocumentProcessor):
@@ -78,11 +113,11 @@ class PdfProcessor(BaseDocumentProcessor):
             raise ProcessingError("File format not supported") from e
         except Exception as e:
             logger.exception("Failed to extract PDF metadata")
-            raise ProcessingError(f"Failed to extract PDF metadata: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract PDF metadata: {e!s}") from e
 
     async def extract_content(
         self, file_path: Path, *, start_page: int = 1, end_page: int | None = None
-    ) -> AsyncIterator[Union[str, bytes]]:
+    ) -> AsyncIterator[str | bytes]:
         """Extract content from a PDF document.
 
         Args:
@@ -99,6 +134,9 @@ class PdfProcessor(BaseDocumentProcessor):
         if not file_path.exists():
             raise ProcessingError("File not found")
 
+        # Check if poppler is available before proceeding
+        _check_poppler_available()
+
         # Validate page range
         if start_page < 1:
             raise ProcessingError("Invalid page range: start_page must be >= 1")
@@ -114,10 +152,10 @@ class PdfProcessor(BaseDocumentProcessor):
                     raise ProcessingError(
                         "Invalid page range: end_page must be >= start_page"
                     )
-                if end_page > total_pages:
-                    end_page = total_pages
+                end_page = min(end_page, total_pages)
 
-            # Convert pages to images
+            # Convert pages to images (lazy import for optional dependency)
+            convert_from_path = _get_convert_from_path()
             pages = convert_from_path(
                 file_path,
                 first_page=start_page,
@@ -134,4 +172,4 @@ class PdfProcessor(BaseDocumentProcessor):
             raise
         except Exception as e:
             logger.exception("Failed to extract PDF content")
-            raise ProcessingError(f"Failed to extract PDF content: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract PDF content: {e!s}") from e

@@ -1,8 +1,9 @@
 """Text document processor implementation."""
 
-import os
+from __future__ import annotations
+
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import AsyncIterator, Union
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
@@ -52,7 +53,7 @@ def detect_encoding(file_path: Path) -> str:
         ProcessingError: If file cannot be read with UTF-8 encoding
     """
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             f.read()
         return "utf-8"
     except UnicodeDecodeError:
@@ -114,11 +115,11 @@ class TextProcessor(BaseDocumentProcessor):
             raise
         except Exception as e:
             logger.exception("Failed to extract text metadata")
-            raise ProcessingError(f"Failed to extract text metadata: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract text metadata: {e!s}") from e
 
     async def extract_content(
         self, file_path: Path, *, start_page: int = 1, end_page: int | None = None
-    ) -> AsyncIterator[Union[str, bytes]]:
+    ) -> AsyncIterator[str | bytes]:
         """Extract content from a text document.
 
         Args:
@@ -148,4 +149,4 @@ class TextProcessor(BaseDocumentProcessor):
             raise
         except Exception as e:
             logger.exception("Failed to extract text content")
-            raise ProcessingError(f"Failed to extract text content: {str(e)}") from e
+            raise ProcessingError(f"Failed to extract text content: {e!s}") from e

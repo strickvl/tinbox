@@ -7,7 +7,7 @@ name = "tinbox"
 version = "0.1.0"
 description = "A CLI translation tool using LLMs for document translation"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = "MIT"
 keywords = ["translation", "llm", "cli", "pdf", "docx"]
 authors = [{ name = "strickvl", email = "your.email@example.com" }]
@@ -16,16 +16,13 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.7.0",
-    "pydantic>=2.6.0",
-    "litellm>=1.30.0",
-    "asyncio>=3.4.3",
+    "pydantic>=2.8.0,<3.0.0",
     "structlog>=24.1.0",
     "pypdf>=5.3.0",
     "python-docx>=1.1.2",
@@ -34,9 +31,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+openai = ["openai>=1.0.0"]
+anthropic = ["anthropic>=0.40.0"]
 pdf = ["pdf2image>=1.17.0"]
 docx = ["python-docx>=1.1.0"]
+all = [
+    "openai>=1.0.0",
+    "anthropic>=0.40.0",
+    "pdf2image>=1.17.0",
+    "python-docx>=1.1.0",
+]
 dev = [
+    "openai>=1.0.0",
+    "anthropic>=0.40.0",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.5",
     "pytest-cov>=4.1.0",
@@ -44,6 +51,8 @@ dev = [
     "mypy>=1.8.0",
     "ruff>=0.2.1",
     "isort>=5.13.2",
+    "pdf2image>=1.17.0",
+    "python-docx>=1.1.0",
 ]
 
 [project.scripts]
@@ -86,14 +95,20 @@ line_length = 88
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "B", "I", "N", "UP", "PL", "RUF"]
-ignore = []
+select = ["E", "F", "B", "I", "N", "UP", "RUF"]
+ignore = [
+    "B008",    # Function calls in argument defaults (required for typer)
+    "B904",    # Raise from within except (pre-existing, fix separately)
+    "B017",    # Assert blind exception in tests (acceptable for tests)
+    "E501",    # Line too long (handled by formatter)
+]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"src/tinbox/core/doctor.py" = ["F401"]  # Intentional imports to check availability
 
 [tool.coverage.run]
 source = ["src"]

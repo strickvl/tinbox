@@ -1,10 +1,13 @@
 """Package initialization for document processors."""
 
-from pathlib import Path
-from typing import Any, AsyncIterator, Protocol, Union, List, Dict, Type
-from abc import ABC, abstractmethod
+from __future__ import annotations
 
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Any, Protocol, Union
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from tinbox.core.types import FileType
 from tinbox.utils.logging import get_logger
@@ -15,7 +18,7 @@ logger = get_logger(__name__)
 class DocumentContent(BaseModel):
     """Represents a document ready for translation."""
 
-    pages: List[Union[str, bytes]]  # Individual pages for translation
+    pages: list[str | bytes]  # Individual pages for translation
     content_type: str = Field(pattern=r"^(text|image)/.+$")
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -23,9 +26,7 @@ class DocumentContent(BaseModel):
 
     @field_validator("pages")
     @classmethod
-    def validate_pages_not_empty(
-        cls, v: List[Union[str, bytes]]
-    ) -> List[Union[str, bytes]]:
+    def validate_pages_not_empty(cls, v: list[str | bytes]) -> list[str | bytes]:
         """Validate that pages list is not empty."""
         if not v:
             raise ValueError("Pages cannot be empty")
@@ -74,7 +75,7 @@ class DocumentProcessor(Protocol):
 
     async def extract_content(
         self, file_path: Path, *, start_page: int = 1, end_page: int | None = None
-    ) -> AsyncIterator[Union[str, bytes]]:
+    ) -> AsyncIterator[str | bytes]:
         """Extract content from a document.
 
         Args:
@@ -151,11 +152,16 @@ class ProcessingError(Exception):
     pass
 
 
-def get_processor_for_file_type(file_type: FileType) -> DocumentProcessor:
+def get_processor_for_file_type(
+    file_type: FileType,
+    *,
+    settings: dict[str, Any] | None = None,
+) -> DocumentProcessor:
     """Get the appropriate processor for a file type.
 
     Args:
         file_type: File type to get processor for
+        settings: Optional settings dict passed to processor (e.g., {"dpi": 300} for PDF)
 
     Returns:
         Document processor instance
@@ -163,29 +169,33 @@ def get_processor_for_file_type(file_type: FileType) -> DocumentProcessor:
     Raises:
         ProcessingError: If no processor is available for the file type
     """
-    # Import processors here to avoid circular imports
-    from tinbox.core.processor.docx import WordProcessor as DocxProcessor
-    from tinbox.core.processor.pdf import PdfProcessor
-    from tinbox.core.processor.text import TextProcessor
+    # Import processors lazily to avoid loading unnecessary dependencies
+    if file_type == FileType.PDF:
+        from tinbox.core.processor.pdf import PdfProcessor
 
-    processors: Dict[FileType, Type[DocumentProcessor]] = {
-        FileType.PDF: PdfProcessor,
-        FileType.DOCX: DocxProcessor,
-        FileType.TXT: TextProcessor,
-    }
+        return PdfProcessor(settings=settings)
+    elif file_type == FileType.DOCX:
+        from tinbox.core.processor.docx import WordProcessor as DocxProcessor
 
-    processor_class = processors.get(file_type)
-    if not processor_class:
+        return DocxProcessor()
+    elif file_type == FileType.TXT:
+        from tinbox.core.processor.text import TextProcessor
+
+        return TextProcessor()
+    else:
         raise ProcessingError(f"No processor available for file type: {file_type}")
 
-    return processor_class()
 
-
-async def load_document(file_path: Path) -> DocumentContent:
+async def load_document(
+    file_path: Path,
+    *,
+    processor_settings: dict[str, Any] | None = None,
+) -> DocumentContent:
     """Load a document and prepare it for translation.
 
     Args:
         file_path: Path to the document to load
+        processor_settings: Optional settings passed to the processor (e.g., {"dpi": 300} for PDFs)
 
     Returns:
         Document content ready for translation
@@ -195,7 +205,7 @@ async def load_document(file_path: Path) -> DocumentContent:
     """
     try:
         file_type = FileType(file_path.suffix.lstrip(".").lower())
-        processor = get_processor_for_file_type(file_type)
+        processor = get_processor_for_file_type(file_type, settings=processor_settings)
 
         # Get metadata first
         metadata = await processor.get_metadata(file_path)
@@ -215,16 +225,16 @@ async def load_document(file_path: Path) -> DocumentContent:
         )
 
     except Exception as e:
-        raise ProcessingError(f"Failed to load document: {str(e)}") from e
+        raise ProcessingError(f"Failed to load document: {e!s}") from e
 
 
 __all__ = [
+    "BaseDocumentProcessor",
     "DocumentContent",
     "DocumentMetadata",
     "DocumentProcessor",
-    "BaseDocumentProcessor",
-    "ProcessingError",
     "FileType",
+    "ProcessingError",
     "get_processor_for_file_type",
     "load_document",
 ]

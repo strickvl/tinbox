@@ -4,9 +4,8 @@ from pathlib import Path
 
 import pytest
 from docx import Document
-from docx.shared import Inches
 
-from tinbox.core.processor import DocumentContent, DocumentMetadata, ProcessingError
+from tinbox.core.processor import DocumentMetadata, ProcessingError
 from tinbox.core.processor.docx import WordProcessor
 from tinbox.core.types import FileType
 

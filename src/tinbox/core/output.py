@@ -2,9 +2,9 @@
 
 import json
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol, Union
+from typing import Protocol
 
 from pydantic import BaseModel, Field
 
@@ -14,7 +14,7 @@ from tinbox.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-class OutputFormat(str, Enum):
+class OutputFormat(StrEnum):
     """Supported output formats."""
 
     TEXT = "text"
@@ -49,7 +49,7 @@ class OutputHandler(Protocol):
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write the translation output.
 
@@ -66,7 +66,7 @@ class JSONOutputHandler:
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write translation output as JSON.
 
@@ -89,7 +89,7 @@ class JSONOutputHandler:
         json_str = json.dumps(data, indent=2)
 
         if file:
-            file.write_text(json_str)
+            file.write_text(json_str, encoding="utf-8")
         else:
             print(json_str)
 
@@ -100,7 +100,7 @@ class TextOutputHandler:
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write translation output as plain text.
 
@@ -110,7 +110,7 @@ class TextOutputHandler:
         """
         # Just write the translated text
         if file:
-            file.write_text(output.result.text)
+            file.write_text(output.result.text, encoding="utf-8")
         else:
             print(output.result.text)
 
@@ -121,7 +121,7 @@ class MarkdownOutputHandler:
     def write(
         self,
         output: TranslationOutput,
-        file: Optional[Path] = None,
+        file: Path | None = None,
     ) -> None:
         """Write translation output as Markdown.
 
@@ -182,7 +182,7 @@ class MarkdownOutputHandler:
         md_content = "\n".join(md_lines)
 
         if file:
-            file.write_text(md_content)
+            file.write_text(md_content, encoding="utf-8")
         else:
             print(md_content)
 

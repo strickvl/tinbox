@@ -1,14 +1,22 @@
 """Command-line interface for Tinbox."""
 
+from __future__ import annotations
+
 import asyncio
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 
 from tinbox.core import (
@@ -19,14 +27,19 @@ from tinbox.core import (
     translate_document,
 )
 from tinbox.core.cost import estimate_cost
-from tinbox.core.processor import load_document
-from tinbox.core.translation import create_translator
+from tinbox.core.doctor import run_doctor_checks
 from tinbox.core.output import (
     OutputFormat,
     TranslationMetadata,
     TranslationOutput,
     create_handler,
 )
+from tinbox.core.processor import load_document
+from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn
+from tinbox.core.translation import create_translator
+from tinbox.core.translation.checkpoint import CheckpointManager
+from tinbox.core.translation.glossary import GlossaryManager
+from tinbox.utils.language import LanguageError, validate_language_pair
 from tinbox.utils.logging import configure_logging, get_logger
 
 app = typer.Typer(
@@ -49,7 +62,7 @@ def version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
-    version: Optional[bool] = typer.Option(
+    version: bool | None = typer.Option(
         None,
         "--version",
         "-v",
@@ -83,7 +96,12 @@ def display_cost_estimate(estimate, model: ModelType) -> None:
     table.add_row("Estimated Tokens", f"{estimate.estimated_tokens:,}")
     if model != ModelType.OLLAMA:
         table.add_row("Estimated Cost", f"${estimate.estimated_cost:.2f}")
-    table.add_row("Estimated Time", f"{estimate.estimated_time / 60:.1f} minutes")
+    table.add_row(
+        "Estimated Time",
+        f"{estimate.estimated_time / 60:.1f} minutes"
+        if estimate.estimated_time > 60
+        else "<1 minute",
+    )
     table.add_row("Cost Level", estimate.cost_level.value.title())
 
     console.print(table)
@@ -132,7 +150,7 @@ def translate(
         dir_okay=False,
         resolve_path=True,
     ),
-    output_file: Optional[Path] = typer.Option(
+    output_file: Path | None = typer.Option(
         None,
         "--output",
         "-o",
@@ -157,16 +175,26 @@ def translate(
         help="Target language code. Defaults to 'en' (English).",
     ),
     model: str = typer.Option(
-        "anthropic:claude-3-sonnet",
+        ...,
         "--model",
         "-m",
         help="Model to use (e.g., 'openai:gpt-4o', 'anthropic:claude-3-sonnet', 'ollama:mistral-small').",
     ),
-    algorithm: str = typer.Option(
-        "page",
+    algorithm: str | None = typer.Option(
+        None,
         "--algorithm",
         "-a",
-        help="Translation algorithm to use: 'page' or 'sliding-window'.",
+        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware'. Auto-selects based on file type if not specified (PDF→page, text→context-aware).",
+    ),
+    context_size: int | None = typer.Option(
+        2000,
+        "--context-size",
+        help="Target chunk size for context-aware algorithm (characters).",
+    ),
+    custom_split_token: str | None = typer.Option(
+        None,
+        "--split-token",
+        help="Custom token to split text on (context-aware only).",
     ),
     dry_run: bool = typer.Option(
         False,
@@ -178,7 +206,7 @@ def translate(
         "--force",
         help="Skip warnings and proceed with translation.",
     ),
-    max_cost: Optional[float] = typer.Option(
+    max_cost: float | None = typer.Option(
         None,
         "--max-cost",
         help="Maximum cost threshold in USD.",
@@ -188,20 +216,93 @@ def translate(
         "--verbose",
         help="Show detailed progress information.",
     ),
+    checkpoint_dir: Path | None = typer.Option(
+        None,
+        "--checkpoint-dir",
+        help="Directory to store translation checkpoints for resuming interrupted translations.",
+    ),
+    checkpoint_frequency: int = typer.Option(
+        1,
+        "--checkpoint-frequency",
+        help="Save checkpoint every N pages/chunks (default: 1).",
+    ),
+    use_glossary: bool = typer.Option(
+        False,
+        "--glossary",
+        help="Enable glossary for consistent term translations.",
+    ),
+    glossary_file: Path | None = typer.Option(
+        None,
+        "--glossary-file",
+        help="Path to existing glossary file (JSON format) to load initial terms from.",
+    ),
+    save_glossary: Path | None = typer.Option(
+        None,
+        "--save-glossary",
+        help="Path to save the updated glossary after translation.",
+    ),
+    reasoning_effort: str = typer.Option(
+        "minimal",
+        "--reasoning-effort",
+        help="Model reasoning effort level (minimal, low, medium, high). Higher levels improve quality but increase cost and time significantly.",
+    ),
+    pdf_dpi: int = typer.Option(
+        200,
+        "--pdf-dpi",
+        help="DPI for PDF rasterization (PDF files only). Higher values = better quality but more tokens. Default: 200.",
+    ),
 ) -> None:
     """Translate a document using LLMs."""
     try:
+        # Validate and normalize language codes early (before cost estimation)
+        try:
+            effective_source = source_lang or "auto"
+            effective_source, effective_target = validate_language_pair(
+                effective_source, target_lang
+            )
+        except LanguageError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        # Validate reasoning effort parameter
+        valid_reasoning_efforts = ["minimal", "low", "medium", "high"]
+        if reasoning_effort not in valid_reasoning_efforts:
+            raise ValueError(
+                f"Invalid reasoning effort '{reasoning_effort}'. "
+                f"Valid options: {', '.join(valid_reasoning_efforts)}"
+            )
+
         # Parse model specification
         model_type, model_name = parse_model_spec(model)
 
         # Determine file type
         file_type = FileType(input_file.suffix.lstrip(".").lower())
 
+        # Auto-select algorithm based on file type, or validate user's choice
+        if algorithm is None:
+            # Auto-select: PDF needs 'page' algorithm, text files use 'context-aware'
+            effective_algorithm = (
+                "page" if file_type == FileType.PDF else "context-aware"
+            )
+        else:
+            effective_algorithm = algorithm
+            # Validate: PDF files only work with 'page' algorithm
+            if file_type == FileType.PDF and algorithm != "page":
+                console.print(
+                    f"\n[red]Error:[/red] PDF files only support the 'page' algorithm.\n"
+                    f"PDFs are processed as images and cannot use '{algorithm}' algorithm.\n"
+                    f"Please use: tinbox translate {input_file} --algorithm page --model {model}"
+                )
+                raise typer.Exit(1)
+
         # Get cost estimate
         estimate = estimate_cost(
             input_file,
             model_type,
+            algorithm=effective_algorithm,
             max_cost=max_cost,
+            use_glossary=use_glossary,
+            reasoning_effort=reasoning_effort,
         )
 
         # Display cost estimate
@@ -222,30 +323,58 @@ def translate(
                 console.print("\nTranslation cancelled.")
                 raise typer.Exit(1)
 
-        # Create translation config
+        # Create translation config (use normalized language codes)
         config = TranslationConfig(
-            source_lang=source_lang or "auto",
-            target_lang=target_lang,
+            source_lang=effective_source,
+            target_lang=effective_target,
             model=model_type,
             model_name=model_name,
-            algorithm=algorithm,
+            algorithm=effective_algorithm,
             input_file=input_file,
             output_file=output_file,
             force=force,
             max_cost=max_cost,
             verbose=verbose,
+            context_size=context_size,
+            custom_split_token=custom_split_token,
+            checkpoint_dir=checkpoint_dir,
+            checkpoint_frequency=checkpoint_frequency,
+            use_glossary=use_glossary,
+            reasoning_effort=reasoning_effort,
         )
 
-        # Load document
-        content = asyncio.run(load_document(input_file))
+        # Load document (pass DPI setting for PDF files)
+        processor_settings = {"dpi": pdf_dpi} if file_type == FileType.PDF else None
+        content = asyncio.run(
+            load_document(input_file, processor_settings=processor_settings)
+        )
 
         # Initialize model interface
         translator = create_translator(config)
+
+        # Create checkpoint manager if checkpoint directory is specified
+        checkpoint_manager = None
+        if config.checkpoint_dir:
+            checkpoint_manager = CheckpointManager(config)
+
+        # Initialize glossary manager
+        glossary_manager = None
+        if use_glossary:
+            if glossary_file:
+                glossary_manager = GlossaryManager.load_from_file(glossary_file)
+            else:
+                glossary_manager = GlossaryManager()
 
         # Show progress
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            CurrentCostColumn(),
+            EstimatedCostColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
             console=console,
         ) as progress:
             # Run translation
@@ -255,16 +384,30 @@ def translate(
                     config=config,
                     translator=translator,
                     progress=progress,
+                    checkpoint_manager=checkpoint_manager,
+                    glossary_manager=glossary_manager,
                 )
             )
 
-            # Convert TranslationResponse to TranslationResult
+            # Convert TranslationResponse to TranslationResult (including failure info)
             result = TranslationResult(
                 text=response.text,
                 tokens_used=response.tokens_used,
                 cost=response.cost,
                 time_taken=response.time_taken,
+                failed_pages=response.failed_pages,
+                page_errors=response.page_errors,
+                warnings=response.warnings,
             )
+
+        # Combine warnings from estimate and translation
+        all_warnings = estimate.warnings + response.warnings
+
+        # Build error messages from failed pages
+        errors = [
+            f"Failed to translate page {p}: {response.page_errors.get(p, 'Unknown error')}"
+            for p in response.failed_pages
+        ]
 
         # Create translation output with metadata
         output = TranslationOutput(
@@ -277,12 +420,21 @@ def translate(
                 input_file_type=file_type,
             ),
             result=result,
-            warnings=estimate.warnings,
+            warnings=all_warnings,
+            errors=errors,
         )
 
         # Get appropriate output handler
         handler = create_handler(output_format)
         handler.write(output, output_file)
+
+        # Save glossary if requested
+        if glossary_manager and save_glossary:
+            glossary_manager.save_to_file(save_glossary)
+
+        # Clean up checkpoints after successful output
+        if checkpoint_manager:
+            asyncio.run(checkpoint_manager.cleanup_old_checkpoints(config.input_file))
 
         # Show final statistics (only for text output)
         if output_format == OutputFormat.TEXT:
@@ -299,8 +451,70 @@ def translate(
 
     except Exception as e:
         logger.exception("Translation failed")
-        console.print(f"[red]Error: {str(e)}[/red]")
+        console.print(f"[red]Error: {e!s}[/red]")
         sys.exit(1)
+
+
+@app.command()
+def doctor(
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output report as JSON.",
+    ),
+) -> None:
+    """Check Tinbox setup and diagnose common issues.
+
+    Runs diagnostic checks for:
+    - System tools (poppler for PDF processing)
+    - Python packages (pdf2image, python-docx, pillow)
+    - API keys (OpenAI, Anthropic, Google)
+    - Local model support (Ollama)
+    """
+    report = run_doctor_checks()
+
+    if json_output:
+        console.print(report.model_dump_json(indent=2))
+        return
+
+    # Group checks by category
+    categories: dict[str, list] = {}
+    for check in report.checks:
+        if check.category not in categories:
+            categories[check.category] = []
+        categories[check.category].append(check)
+
+    console.print("\n[bold]Tinbox Diagnostic Report[/bold]\n")
+
+    for category, checks in categories.items():
+        table = Table(title=category, show_header=True)
+        table.add_column("Check", style="cyan")
+        table.add_column("Status")
+        table.add_column("Details")
+
+        for check in checks:
+            status = "[green]OK[/green]" if check.ok else "[red]MISSING[/red]"
+            details = check.details or ""
+            if not check.ok and check.hint:
+                details = f"{details}\n[dim]{check.hint}[/dim]"
+            table.add_row(check.name, status, details)
+
+        console.print(table)
+        console.print()
+
+    # Summary
+    if report.all_ok:
+        console.print("[green]All checks passed![/green] Tinbox is ready to use.\n")
+    elif report.required_ok:
+        console.print(
+            "[yellow]Core checks passed.[/yellow] Some optional features may be unavailable.\n"
+            "Set API keys for cloud models or install Ollama for local models.\n"
+        )
+    else:
+        console.print(
+            "[red]Some required checks failed.[/red] Please fix the issues above.\n"
+        )
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

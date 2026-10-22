@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from tinbox.core.processor import DocumentContent, DocumentMetadata, ProcessingError
+from tinbox.core.processor import DocumentMetadata, ProcessingError
 from tinbox.core.processor.text import TextProcessor
 from tinbox.core.types import FileType
 
