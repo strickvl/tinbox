@@ -1,0 +1,119 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish
+        required: true
+        type: string
+      publish:
+        description: Publish to PyPI after validation (otherwise build only)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      GOOGLE_API_KEY: ""
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.4"
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Verify release tag and version
+        run: |
+          git show-ref --verify "refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor HEAD origin/main
+          uv run --no-project python - <<'PY'
+          import os
+          from pathlib import Path
+          import runpy
+          import tomllib
+
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          runtime_version = runpy.run_path("src/tinbox/__init__.py")["__version__"]
+          if os.environ["RELEASE_TAG"] != f"v{version}" or runtime_version != version:
+              raise SystemExit("Release tag, package version, and runtime version must match")
+          PY
+
+      - name: Install Poppler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          pdfinfo -v
+          pdftoppm -v
+
+      - name: Install locked dependencies
+        run: uv sync --locked --all-extras
+
+      - name: Check code and tests
+        run: |
+          uv run --locked --all-extras ruff check src tests
+          uv run --locked --all-extras ruff format --check src tests
+          uv run --locked --all-extras ty check
+          uv run --locked --all-extras pytest
+
+      - name: Build distributions
+        run: uv build --no-sources
+
+      - name: Smoke test distributions
+        run: |
+          uv run --isolated --no-project --with dist/*.whl tinbox --version
+          uv run --isolated --no-project --with dist/*.tar.gz tinbox --version
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'release' || inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/tinbox/
+    permissions:
+      id-token: write
+    steps:
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.13.4"
+          enable-cache: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish with trusted publishing
+        run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz
