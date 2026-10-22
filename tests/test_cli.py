@@ -1,5 +1,7 @@
 """Tests for the CLI interface."""
 
+import json
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -79,6 +81,68 @@ def test_version(cli_runner):
     result = cli_runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert "Tinbox version:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("missing_poppler", "missing_pdf2image"),
+    [(True, False), (False, True), (True, True)],
+)
+@pytest.mark.parametrize("json_output", [False, True])
+def test_doctor_missing_pdf_support(
+    cli_runner, monkeypatch, missing_poppler, missing_pdf2image, json_output
+):
+    monkeypatch.setattr(
+        "tinbox.core.doctor.shutil.which",
+        lambda command: (
+            None if missing_poppler and command == "pdfinfo" else f"/bin/{command}"
+        ),
+    )
+    if missing_pdf2image:
+        monkeypatch.setitem(sys.modules, "pdf2image", None)
+
+    result = cli_runner.invoke(app, ["doctor", "--json"] if json_output else ["doctor"])
+
+    assert result.exit_code == 0, result.output
+    if json_output:
+        checks = {check["name"]: check for check in json.loads(result.output)["checks"]}
+        for name, missing in [
+            ("poppler-utils", missing_poppler),
+            ("pdf2image", missing_pdf2image),
+        ]:
+            assert checks[name]["ok"] is not missing
+            assert checks[name]["required"] is False
+        if missing_pdf2image:
+            assert (
+                checks["pdf2image"]["hint"] == "Install with: pip install tinbox[pdf]"
+            )
+        return
+
+    assert "Some optional features may be unavailable" in result.output
+    assert "OPTIONAL" in result.output
+    if missing_poppler:
+        assert "brew install poppler" in result.output
+    if missing_pdf2image:
+        assert "tinbox[pdf]" in result.output
+
+
+@pytest.mark.parametrize("module_name", ["PIL", "docx"])
+def test_doctor_missing_required_package(cli_runner, monkeypatch, module_name):
+    monkeypatch.setitem(sys.modules, module_name, None)
+
+    result = cli_runner.invoke(app, ["doctor"])
+
+    assert result.exit_code == 1
+    assert "Some required checks failed" in result.output
+
+
+@pytest.mark.parametrize("module_name", ["openai", "anthropic"])
+def test_doctor_missing_optional_model_sdk(cli_runner, monkeypatch, module_name):
+    monkeypatch.setitem(sys.modules, module_name, None)
+
+    result = cli_runner.invoke(app, ["doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert "Some optional features may be unavailable" in result.output
 
 
 def test_translate_basic(

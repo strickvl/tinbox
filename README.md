@@ -301,9 +301,11 @@ tinbox doctor
 ```
 
 This checks:
-- ✅ Required system tools (poppler for PDFs)
-- ✅ Optional Python dependencies (pdf2image, python-docx)
-- ✅ API key configuration
+- ✅ Required Python dependencies (Pillow, python-docx)
+- ✅ Optional PDF dependencies (Poppler, pdf2image)
+- ✅ Model SDKs, API key configuration, and local model availability
+
+Missing optional dependencies are shown with installation hints and do not cause `tinbox doctor` to fail. Poppler and pdf2image are required when translating PDFs, but are not needed for text files.
 
 **Common Issues:**
 
