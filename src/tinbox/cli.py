@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -26,7 +27,7 @@ from tinbox.core import (
     TranslationResult,
     translate_document,
 )
-from tinbox.core.cost import estimate_cost
+from tinbox.core.cost import estimate_cost, is_local_model
 from tinbox.core.doctor import run_doctor_checks
 from tinbox.core.output import (
     OutputFormat,
@@ -39,6 +40,7 @@ from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn
 from tinbox.core.translation import create_translator
 from tinbox.core.translation.checkpoint import CheckpointManager
 from tinbox.core.translation.glossary import GlossaryManager
+from tinbox.core.types import TranslationProtocol
 from tinbox.utils.language import LanguageError, validate_language_pair
 from tinbox.utils.logging import configure_logging, get_logger
 
@@ -87,14 +89,16 @@ def main(
     configure_logging(level=log_level, json=json_logs)
 
 
-def display_cost_estimate(estimate, model: ModelType) -> None:
+def display_cost_estimate(estimate, model: ModelType, *, local: bool = False) -> None:
     """Display cost estimate in a rich format."""
     table = Table(title="Cost Estimate", show_header=False)
     table.add_column("Metric", style="bold blue")
     table.add_column("Value")
 
     table.add_row("Estimated Tokens", f"{estimate.estimated_tokens:,}")
-    if model != ModelType.OLLAMA:
+    if is_local_model(model, local=local):
+        table.add_row("API Charges", "None (local model)")
+    else:
         table.add_row("Estimated Cost", f"${estimate.estimated_cost:.2f}")
     table.add_row(
         "Estimated Time",
@@ -184,7 +188,17 @@ def translate(
         None,
         "--algorithm",
         "-a",
-        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware'. Auto-selects based on file type if not specified (PDF→page, text→context-aware).",
+        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware'. Defaults to page for PDF/TranslateGemma, context-aware for other text.",
+    ),
+    translation_protocol: TranslationProtocol = typer.Option(
+        TranslationProtocol.CHAT,
+        "--translation-protocol",
+        help="Use chat JSON responses or TranslateGemma plain-text completions.",
+    ),
+    local_model: bool = typer.Option(
+        False,
+        "--local",
+        help="The endpoint runs a local model with no API charges (not a paid API proxy).",
     ),
     context_size: int | None = typer.Option(
         2000,
@@ -282,7 +296,10 @@ def translate(
         if algorithm is None:
             # Auto-select: PDF needs 'page' algorithm, text files use 'context-aware'
             effective_algorithm = (
-                "page" if file_type == FileType.PDF else "context-aware"
+                "page"
+                if file_type == FileType.PDF
+                or translation_protocol == TranslationProtocol.TRANSLATEGEMMA
+                else "context-aware"
             )
         else:
             effective_algorithm = algorithm
@@ -295,40 +312,14 @@ def translate(
                 )
                 raise typer.Exit(1)
 
-        # Get cost estimate
-        estimate = estimate_cost(
-            input_file,
-            model_type,
-            algorithm=effective_algorithm,
-            max_cost=max_cost,
-            use_glossary=use_glossary,
-            reasoning_effort=reasoning_effort,
-        )
-
-        # Display cost estimate
-        console.print("\n[bold]Translation Plan[/bold]")
-        display_cost_estimate(estimate, model_type)
-
-        # In dry-run mode, exit after showing estimate
-        if dry_run:
-            return
-
-        # Check for warnings and confirm if needed
-        if not force and estimate.warnings:
-            console.print(
-                "\n[yellow]Warning:[/yellow] This translation has potential issues."
-            )
-            proceed = typer.confirm("Do you want to proceed?")
-            if not proceed:
-                console.print("\nTranslation cancelled.")
-                raise typer.Exit(1)
-
         # Create translation config (use normalized language codes)
         config = TranslationConfig(
             source_lang=effective_source,
             target_lang=effective_target,
             model=model_type,
             model_name=model_name,
+            translation_protocol=translation_protocol,
+            local_model=local_model,
             algorithm=effective_algorithm,
             input_file=input_file,
             output_file=output_file,
@@ -342,6 +333,41 @@ def translate(
             use_glossary=use_glossary,
             reasoning_effort=reasoning_effort,
         )
+
+        # Get cost estimate
+        if (
+            translation_protocol == TranslationProtocol.TRANSLATEGEMMA
+            and not os.environ.get("OPENAI_BASE_URL")
+        ):
+            raise ValueError("Set OPENAI_BASE_URL to your TranslateGemma server")
+
+        estimate = estimate_cost(
+            input_file,
+            model_type,
+            algorithm=effective_algorithm,
+            max_cost=max_cost,
+            use_glossary=use_glossary,
+            reasoning_effort=reasoning_effort,
+            local=local_model,
+        )
+
+        # Display cost estimate
+        console.print("\n[bold]Translation Plan[/bold]")
+        display_cost_estimate(estimate, model_type, local=local_model)
+
+        # In dry-run mode, exit after showing estimate
+        if dry_run:
+            return
+
+        # Check for warnings and confirm if needed
+        if not force and estimate.warnings and estimate.requires_confirmation:
+            console.print(
+                "\n[yellow]Review the token and cost estimates above before proceeding.[/yellow]"
+            )
+            proceed = typer.confirm("Do you want to proceed?")
+            if not proceed:
+                console.print("\nTranslation cancelled.")
+                raise typer.Exit(1)
 
         # Load document (pass DPI setting for PDF files)
         processor_settings = {"dpi": pdf_dpi} if file_type == FileType.PDF else None
@@ -444,7 +470,7 @@ def translate(
 
             table.add_row("Time Taken", f"{result.time_taken:.1f} seconds")
             table.add_row("Tokens Used", f"{result.tokens_used:,}")
-            if model_type != ModelType.OLLAMA:
+            if not is_local_model(model_type, local=local_model):
                 table.add_row("Final Cost", f"${result.cost:.4f}")
 
             console.print("\n", table)

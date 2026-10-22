@@ -121,6 +121,28 @@ pip install tinbox          # Base package only (no cloud providers)
 > **Note:** Ollama and Gemini are accessed via OpenAI-compatible APIs, so they require the `openai` extra.
 > For [OpenRouter](https://openrouter.ai), use `openai:model-name` with `OPENAI_BASE_URL=https://openrouter.ai/api/v1`.
 
+### TranslateGemma with oMLX
+
+TranslateGemma uses a translation-specific prompt rather than Tinbox's usual chat and JSON protocol. For an oMLX server hosting the model, select its plain-text protocol explicitly:
+
+```bash
+export OPENAI_BASE_URL="http://127.0.0.1:8000/v1"
+export OPENAI_API_KEY="local"  # Or the key configured on your server
+
+tinbox translate --from de --to en \
+  --model openai:mlx-community--translategemma-27b-it-4bit \
+  --translation-protocol translategemma --local \
+  --format markdown ./translate-test.txt
+```
+
+Use the exact model ID listed by your server. This mode renders the text form of [TranslateGemma's template](https://huggingface.co/mlx-community/translategemma-27b-it-4bit/blob/main/chat_template.jinja) and sends it to `/v1/completions`, following [oMLX's guidance](https://github.com/jundot/omlx/issues/879#issuecomment-4293308928). It reads the plain translation response without requiring JSON.
+
+The initial mode supports short `.txt` files, an explicit source language, and the `page` algorithm, which is selected automatically. Context-aware/sliding-window translation, glossary, reasoning options, and image/PDF inputs are rejected before translation. Each text file is sent as one request. [Google documents a 2K-token input context](https://huggingface.co/google/translategemma-27b-it#usage); Tinbox does not load the model tokenizer or enforce that limit, so split longer files before using this mode. Output is capped at 2,048 tokens; an incomplete response is reported as a failure.
+
+`--local` declares that the endpoint runs a model without API charges. It applies zero API cost to both estimates and recorded usage, and also works with the default chat protocol. Use it only for a local model, not for a localhost proxy that forwards requests to paid providers. Without this flag, custom OpenAI-compatible endpoints retain Tinbox's approximate OpenAI provider rates. Ollama has zero API charges by default. Token and time estimates are approximate, and context-overhead notices do not indicate a detected translation-quality problem.
+
+The protocol is covered by real-SDK tests over mocked HTTP, including a complete CLI translation. Live oMLX/model inference has not been validated by those tests.
+
 ### System Requirements
 
 **For PDF processing**, install `poppler-utils`:

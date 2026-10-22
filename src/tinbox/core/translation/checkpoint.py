@@ -95,6 +95,8 @@ class CheckpointManager:
                     "target_lang": self.config.target_lang,
                     "model": self.config.model.value,
                     "algorithm": self.config.algorithm,
+                    "translation_protocol": self.config.translation_protocol.value,
+                    "local_model": self.config.local_model,
                 },
             }
 
@@ -136,6 +138,9 @@ class CheckpointManager:
                 or config.get("target_lang") != self.config.target_lang
                 or config.get("model") != self.config.model.value
                 or config.get("algorithm") != self.config.algorithm
+                or config.get("translation_protocol", "chat")
+                != self.config.translation_protocol.value
+                or config.get("local_model", False) != self.config.local_model
             ):
                 self._logger.warning(
                     "Checkpoint configuration mismatch",

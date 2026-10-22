@@ -7,12 +7,78 @@ import pytest
 
 from tinbox.core.cost import (
     CostLevel,
+    calculate_usage_cost,
     estimate_context_aware_tokens,
     estimate_cost,
     estimate_document_tokens,
     get_cost_level,
+    is_local_model,
 )
 from tinbox.core.types import FileType, ModelType
+
+
+@pytest.mark.parametrize(
+    "model,local,expected",
+    [
+        (ModelType.OPENAI, False, False),
+        (ModelType.OPENAI, True, True),
+        (ModelType.ANTHROPIC, False, False),
+        (ModelType.ANTHROPIC, True, True),
+        (ModelType.GEMINI, False, False),
+        (ModelType.GEMINI, True, True),
+        (ModelType.OLLAMA, False, True),
+        (ModelType.OLLAMA, True, True),
+    ],
+)
+def test_is_local_model(model, local, expected):
+    assert is_local_model(model, local=local) is expected
+
+
+@pytest.mark.parametrize("model", list(ModelType))
+def test_only_ollama_uses_local_pricing_by_default(model):
+    assert is_local_model(model) is (model == ModelType.OLLAMA)
+
+
+@pytest.mark.parametrize(
+    "model,local,expected_cost,expected_speed",
+    [
+        (ModelType.OPENAI, True, 0.0, 20),
+        (ModelType.ANTHROPIC, True, 0.0, 20),
+        (ModelType.GEMINI, True, 0.0, 20),
+        (ModelType.OLLAMA, False, 0.0, 20),
+        (ModelType.OLLAMA, True, 0.0, 20),
+        (ModelType.OPENAI, False, 0.0112875, 30),
+        (ModelType.ANTHROPIC, False, 0.01809, 30),
+        (ModelType.GEMINI, False, 0.0112875, 30),
+    ],
+)
+def test_estimated_and_usage_cost_agree(
+    tmp_path, model, local, expected_cost, expected_speed
+):
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("a" * 4000)
+
+    estimate = estimate_cost(file_path, model, local=local)
+
+    assert estimate.estimated_cost == pytest.approx(expected_cost)
+    assert calculate_usage_cost(model, 1030, 1000, local=local) == pytest.approx(
+        expected_cost
+    )
+    assert estimate.estimated_time == pytest.approx(1000 / expected_speed)
+
+
+def test_loopback_proxy_keeps_cloud_pricing_by_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:1234/v1")
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("a" * 4000)
+
+    estimate = estimate_cost(file_path, ModelType.OPENAI)
+
+    assert estimate.estimated_cost == pytest.approx(0.0112875)
+    assert calculate_usage_cost(ModelType.OPENAI, 1030, 1000) == pytest.approx(
+        0.0112875
+    )
+    assert estimate.estimated_time == pytest.approx(1000 / 30)
 
 
 def test_cost_level_thresholds():
@@ -231,22 +297,74 @@ def test_context_aware_cost_warning():
         # Percentage: 3120/1000 * 100 = 312%
         assert "+3,120 tokens" in warning
         assert "~312% overhead" in warning
+        assert "approximate" in warning
+        assert "quality" not in warning
 
 
-def test_context_aware_no_warning_for_ollama():
-    """Test that context-aware algorithm doesn't warn for Ollama."""
+def test_context_aware_warning_for_ollama():
+    """Local context overhead guidance describes tokens and runtime."""
     file_path = Path("test.txt")
 
     with patch("tinbox.core.cost.estimate_document_tokens", return_value=1000):
         estimate = estimate_cost(file_path, ModelType.OLLAMA, algorithm="context-aware")
 
-        # Should not have context overhead warning for free models
         context_warnings = [
             warning
             for warning in estimate.warnings
             if "Context-aware algorithm uses additional input tokens" in warning
         ]
-        assert len(context_warnings) == 0
+        assert len(context_warnings) == 1
+        assert "runtime" in context_warnings[0]
+        assert "approximate" in context_warnings[0]
+        assert "cost" not in context_warnings[0]
+        assert "quality" not in context_warnings[0]
+
+
+@pytest.mark.parametrize("model", [ModelType.OPENAI, ModelType.OLLAMA])
+def test_empty_context_aware_document(tmp_path, model):
+    file_path = tmp_path / "empty.txt"
+    file_path.write_text("")
+
+    estimate = estimate_cost(file_path, model, algorithm="context-aware")
+
+    assert estimate.estimated_tokens == 0
+    assert estimate.estimated_cost == 0
+    assert estimate.estimated_time == 0
+    assert estimate.warnings == []
+
+
+@pytest.mark.parametrize(
+    "model,local",
+    [
+        (ModelType.OPENAI, True),
+        (ModelType.ANTHROPIC, True),
+        (ModelType.GEMINI, True),
+        (ModelType.OLLAMA, False),
+    ],
+)
+def test_local_warnings_do_not_suggest_charges(tmp_path, model, local):
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("a" * 400_000)
+
+    estimate = estimate_cost(
+        file_path,
+        model,
+        algorithm="context-aware",
+        use_glossary=True,
+        max_cost=0.01,
+        reasoning_effort="high",
+        local=local,
+    )
+
+    assert estimate.estimated_cost == 0
+    assert len(estimate.warnings) == 2
+    warnings = " ".join(estimate.warnings)
+    assert "token and time estimates are approximate" in warnings
+    assert "cost" not in warnings
+    assert "$" not in warnings
+    assert "quality" not in warnings
+    assert "Glossary enabled" not in warnings
+    assert "Large document" not in warnings
 
 
 def test_glossary_cost_overhead():

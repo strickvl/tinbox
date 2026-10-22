@@ -243,7 +243,10 @@ class AnthropicTranslator(ModelInterface):
 
             tokens = input_tokens + output_tokens
             cost = calculate_usage_cost(
-                ModelType.ANTHROPIC, input_tokens, output_tokens
+                ModelType.ANTHROPIC,
+                input_tokens,
+                output_tokens,
+                local=request.local_model,
             )
             time_taken = (datetime.now() - start_time).total_seconds()
             final_text = content_prefix + text + content_suffix

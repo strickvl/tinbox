@@ -243,6 +243,8 @@ async def translate_page_by_page(
                     context=None,  # No context for page-by-page algorithm
                     content_type=content.content_type,
                     model=config.model,
+                    translation_protocol=config.translation_protocol,
+                    local_model=config.local_model,
                     model_params={"model_name": config.model_name}
                     if config.model_name
                     else {},
@@ -443,6 +445,8 @@ async def translate_sliding_window(
                 context=None,  # No context for sliding-window algorithm
                 content_type="text/plain",
                 model=config.model,
+                translation_protocol=config.translation_protocol,
+                local_model=config.local_model,
                 model_params={"model_name": config.model_name}
                 if config.model_name
                 else {},
@@ -860,6 +864,8 @@ async def translate_context_aware(
                 context=context_info,  # Separate context
                 content_type="text/plain",
                 model=config.model,
+                translation_protocol=config.translation_protocol,
+                local_model=config.local_model,
                 model_params={"model_name": config.model_name}
                 if config.model_name
                 else {},

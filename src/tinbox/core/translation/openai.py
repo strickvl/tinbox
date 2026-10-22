@@ -30,7 +30,8 @@ from tinbox.core.translation.interface import (
     TranslationWithGlossaryResponse,
     TranslationWithoutGlossaryResponse,
 )
-from tinbox.core.types import ModelType
+from tinbox.core.translation.translategemma import build_translategemma_prompt
+from tinbox.core.types import GlossaryEntry, ModelType, TranslationProtocol
 from tinbox.utils.logging import get_logger
 
 try:
@@ -132,6 +133,21 @@ class OpenAITranslator(ModelInterface):
         """Make a chat completion request with retry on rate limits."""
         client = self._get_client(request.model)
 
+        if request.translation_protocol == TranslationProtocol.TRANSLATEGEMMA:
+            prompt = build_translategemma_prompt(request, clean_content)
+            try:
+                return await client.completions.create(
+                    model=get_model_name(request),
+                    prompt=prompt,
+                    temperature=self.temperature,
+                    max_tokens=min(self.max_tokens, 2048),
+                    stop=["<end_of_turn>", "<eos>"],
+                )
+            except Exception as e:
+                if RateLimitError is not None and isinstance(e, RateLimitError):
+                    raise
+                raise TranslationError(f"Translation failed: {e!s}") from e
+
         kwargs: dict = {
             "model": get_model_name(request),
             "messages": self._build_messages(request, clean_content),
@@ -154,7 +170,7 @@ class OpenAITranslator(ModelInterface):
         try:
             return await client.chat.completions.parse(**kwargs)
         except Exception as e:
-            if RateLimitError and isinstance(e, RateLimitError):
+            if RateLimitError is not None and isinstance(e, RateLimitError):
                 raise
             raise TranslationError(f"Translation failed: {e!s}") from e
 
@@ -194,18 +210,24 @@ class OpenAITranslator(ModelInterface):
                     f"Invalid finish reason from model: {response.choices[0].finish_reason}, expected 'stop'"
                 )
 
-            if (
-                not hasattr(response.choices[0], "message")
-                or not response.choices[0].message.content
-            ):
-                raise TranslationError(
-                    "Invalid response format: missing message content"
-                )
+            if request.translation_protocol == TranslationProtocol.TRANSLATEGEMMA:
+                text = response.choices[0].text
+                if not text or not text.strip():
+                    raise TranslationError("No content returned from model")
+                glossary_updates: list[GlossaryEntry] = []
+            else:
+                if (
+                    not hasattr(response.choices[0], "message")
+                    or not response.choices[0].message.content
+                ):
+                    raise TranslationError(
+                        "Invalid response format: missing message content"
+                    )
 
-            text, glossary_updates = parse_translation_response(
-                response.choices[0].message.content,
-                glossary_enabled=bool(request.glossary),
-            )
+                text, glossary_updates = parse_translation_response(
+                    response.choices[0].message.content,
+                    glossary_enabled=bool(request.glossary),
+                )
 
             input_tokens = 0
             output_tokens = 0
@@ -214,7 +236,9 @@ class OpenAITranslator(ModelInterface):
                 output_tokens = getattr(response.usage, "completion_tokens", 0)
 
             tokens = input_tokens + output_tokens
-            cost = calculate_usage_cost(request.model, input_tokens, output_tokens)
+            cost = calculate_usage_cost(
+                request.model, input_tokens, output_tokens, local=request.local_model
+            )
             time_taken = (datetime.now() - start_time).total_seconds()
             final_text = content_prefix + text + content_suffix
             logger.debug("Final text: ", final_text=final_text)
