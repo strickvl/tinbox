@@ -33,6 +33,7 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 - **📚 Glossary Support**: Maintains consistent terminology across documents
 - **💾 Checkpoint & Resume**: Handle large documents with automatic progress saving
 - **📊 Cost Tracking**: Estimate translation costs and time and monitor during translation
+- **🔎 Translation Review**: Opt in to preserve text chunks and their translations, then inspect them in an offline side-by-side report
 
 ## 🎯 The Problems Tinbox Solves
 
@@ -203,6 +204,22 @@ tinbox translate --to es --max-cost 10.00 --model openai:gpt-5-2025-08-07 docume
 tinbox translate --to es --reasoning-effort low --max-cost 10.00 --model openai:gpt-5-2025-08-07 document.txt
 ```
 
+### Review a text translation
+
+Save the source chunks and their translations during a fresh context-aware translation, then generate a report from the saved JSON:
+
+```bash
+tinbox translate ./examples/elara_story.txt --from en --to de \
+  --model openai:gpt-4o --output elara.de.txt \
+  --save-review-input elara.de.review.json
+
+tinbox review elara.de.review.json --output elara.de.review.html
+```
+
+Open `elara.de.review.html` in a browser to inspect every chunk beside its translation. Report generation runs offline and needs no API key. These are paired translation chunks, not aligned sentences or an automated quality assessment. TypeSafe annotations are not included.
+
+Pair export supports fresh `.txt` translations in context-aware mode. Use new paths for the review JSON and HTML files. Both files contain the document text, so share them only with people who should see that content. See the [translation review guide](docs/translation-review.md) for Arabic examples, checkpoint restrictions, the bundle format, and troubleshooting.
+
 ## 💡 Best Practices
 
 | Document Type         | Recommended Settings                    | Notes                                                        |
@@ -235,6 +252,7 @@ tinbox translate --to es --reasoning-effort low --max-cost 10.00 --model openai:
 |                  | `--save-glossary`        | Path to save updated glossary                                     | None            |
 | **Quality**      | `--reasoning-effort`     | Model reasoning level (`minimal`, `low`, `medium`, `high`)        | `minimal`       |
 | **Output**       | `--format, -F`           | Output format (`text`, `json`, `markdown`)                        | `text`          |
+| **Review**       | `--save-review-input`    | Save paired chunks as JSON for a fresh context-aware `.txt` translation | Disabled    |
 | **Cost Control** | `--dry-run`              | Preview costs without translating                                 | Disabled        |
 |                  | `--max-cost`             | Maximum cost limit (USD)                                          | No limit        |
 

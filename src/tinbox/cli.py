@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -38,6 +39,13 @@ from tinbox.core.output import (
 )
 from tinbox.core.processor import load_document
 from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn
+from tinbox.core.review import (
+    ReviewBundle,
+    load_review_bundle,
+    save_review_bundle,
+    validate_new_output_path,
+    write_review_report,
+)
 from tinbox.core.translation import create_translator
 from tinbox.core.translation.checkpoint import CheckpointManager
 from tinbox.core.translation.glossary import GlossaryManager
@@ -166,6 +174,11 @@ def translate(
         "--format",
         "-F",
         help="Output format (text, json, or markdown).",
+    ),
+    save_review_input: Path | None = typer.Option(
+        None,
+        "--save-review-input",
+        help="Save source/translation chunk pairs to a new JSON file for offline review. Fresh .txt context-aware translations only.",
     ),
     source_lang: str = typer.Option(
         None,
@@ -336,7 +349,31 @@ def translate(
             checkpoint_frequency=checkpoint_frequency,
             use_glossary=use_glossary,
             reasoning_effort=reasoning_effort,
+            preserve_review_pairs=save_review_input is not None,
         )
+
+        if save_review_input is not None:
+            translation_paths = [input_file]
+            translation_paths.extend(
+                path for path in (output_file, save_glossary) if path is not None
+            )
+            if checkpoint_dir is not None:
+                translation_paths.append(
+                    checkpoint_dir / f"{input_file.stem}_checkpoint.json"
+                )
+            protected_paths = [*translation_paths]
+            if glossary_file is not None:
+                protected_paths.append(glossary_file)
+            validate_new_output_path(save_review_input, protected_paths)
+            for index, path in enumerate(translation_paths):
+                for other in translation_paths[:index]:
+                    if path.resolve() == other.resolve() or (
+                        path.exists() and other.exists() and path.samefile(other)
+                    ):
+                        raise ValueError(
+                            "Review export requires separate source, translation, "
+                            f"saved glossary and checkpoint paths: {path} and {other}"
+                        )
 
         # Get cost estimate
         if (
@@ -374,6 +411,11 @@ def translate(
                 raise typer.Exit(1)
 
         # Load document (pass DPI setting for PDF files)
+        source_sha256 = (
+            hashlib.sha256(input_file.read_bytes()).hexdigest()
+            if save_review_input is not None
+            else None
+        )
         processor_settings = {"dpi": pdf_dpi} if file_type == FileType.PDF else None
         content = asyncio.run(
             load_document(input_file, processor_settings=processor_settings)
@@ -466,6 +508,40 @@ def translate(
         if checkpoint_manager:
             asyncio.run(checkpoint_manager.cleanup_old_checkpoints(config.input_file))
 
+        if save_review_input is not None:
+            try:
+                if not response.review_pairs or source_sha256 is None:
+                    raise ValueError("Translation did not return review pairs")
+                bundle = ReviewBundle(
+                    source_name=input_file.name,
+                    source_sha256=source_sha256,
+                    source_lang=config.source_lang,
+                    target_lang=config.target_lang,
+                    provider=config.model.value,
+                    model_name=config.model_name,
+                    context_size=config.context_size or 2000,
+                    custom_split_token=config.custom_split_token,
+                    use_glossary=config.use_glossary,
+                    reasoning_effort=config.reasoning_effort,
+                    pairs=response.review_pairs,
+                )
+                save_review_bundle(bundle, save_review_input)
+            except (OSError, ValueError) as e:
+                console.print(
+                    f"[red]Review bundle could not be saved:[/red] {escape(str(e))}\n"
+                    "Translation output has already been written "
+                    + (
+                        f"to {escape(str(output_file))}."
+                        if output_file is not None
+                        else "to the console."
+                    )
+                )
+                sys.exit(1)
+            console.print(
+                f"Review input saved to {escape(str(save_review_input))} "
+                f"({len(bundle.pairs)} chunks)."
+            )
+
         # Show final statistics (only for text output)
         if output_format == OutputFormat.TEXT:
             table = Table(title="Translation Statistics", show_header=False)
@@ -483,6 +559,37 @@ def translate(
         logger.exception("Translation failed")
         console.print(f"[red]Error: {e!s}[/red]")
         sys.exit(1)
+
+
+@app.command()
+def review(
+    review_input: Path = typer.Argument(
+        ...,
+        help="A JSON bundle created with translate --save-review-input.",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    output: Path = typer.Option(
+        ...,
+        "--output",
+        "-o",
+        help="New HTML report file. Its parent directory must already exist.",
+    ),
+) -> None:
+    """Create an offline side-by-side report for human review, without model calls."""
+    try:
+        validate_new_output_path(output, [review_input])
+        bundle = load_review_bundle(review_input)
+        write_review_report(bundle, output)
+    except (OSError, ValueError) as e:
+        console.print(f"[red]Could not create review report:[/red] {escape(str(e))}")
+        raise typer.Exit(1) from e
+    console.print(
+        f"Review report saved to {escape(str(output))} ({len(bundle.pairs)} chunks). "
+        "Open it in a browser. No automated quality assessment was performed."
+    )
 
 
 @app.command()

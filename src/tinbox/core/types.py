@@ -93,6 +93,10 @@ class TranslationConfig(BaseModel):
         default=None,
         description="Custom token to split text on (context-aware only, ignores context_size)",
     )
+    preserve_review_pairs: bool = Field(
+        default=False,
+        description="Preserve source and translation chunks for a review report",
+    )
 
     # Checkpoint settings
     checkpoint_dir: Path | None = Field(
@@ -142,6 +146,18 @@ class TranslationConfig(BaseModel):
                 )
             if self.custom_split_token:
                 raise ValueError("TranslateGemma does not support --split-token")
+        return self
+
+    @model_validator(mode="after")
+    def validate_review_pair_support(self) -> Self:
+        if self.preserve_review_pairs and (
+            self.algorithm != "context-aware"
+            or self.input_file.suffix.lower() != ".txt"
+        ):
+            raise ValueError(
+                "Review pair preservation supports .txt files with "
+                "--algorithm context-aware only"
+            )
         return self
 
     model_config = ConfigDict(
