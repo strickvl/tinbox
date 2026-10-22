@@ -97,7 +97,7 @@ class TestWhitespacePreservationOpenAI:
     @pytest.fixture
     def mock_openai(self, monkeypatch):
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response()
         )
         with patch(

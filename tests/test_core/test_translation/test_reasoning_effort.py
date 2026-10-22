@@ -43,7 +43,7 @@ async def test_openai_reasoning_effort_passed():
 
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response()
         )
         mock_cls.return_value = mock_client
@@ -60,7 +60,7 @@ async def test_openai_reasoning_effort_passed():
         )
         await translator.translate(request)
 
-        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        call_kwargs = mock_client.chat.completions.parse.call_args.kwargs
         assert call_kwargs["reasoning_effort"] == "high"
 
 
@@ -71,7 +71,7 @@ async def test_openai_reasoning_effort_minimal_omitted():
 
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response()
         )
         mock_cls.return_value = mock_client
@@ -88,7 +88,7 @@ async def test_openai_reasoning_effort_minimal_omitted():
         )
         await translator.translate(request)
 
-        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        call_kwargs = mock_client.chat.completions.parse.call_args.kwargs
         assert "reasoning_effort" not in call_kwargs
 
 
@@ -100,7 +100,7 @@ async def test_openai_reasoning_effort_all_non_minimal(effort):
 
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response()
         )
         mock_cls.return_value = mock_client
@@ -117,7 +117,7 @@ async def test_openai_reasoning_effort_all_non_minimal(effort):
         )
         await translator.translate(request)
 
-        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        call_kwargs = mock_client.chat.completions.parse.call_args.kwargs
         assert call_kwargs["reasoning_effort"] == effort
 
 

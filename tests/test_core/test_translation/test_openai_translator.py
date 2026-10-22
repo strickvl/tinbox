@@ -39,9 +39,7 @@ def translator() -> OpenAITranslator:
 def mock_openai_client():
     """Patch AsyncOpenAI so _get_client returns a mock."""
     mock_client = MagicMock()
-    mock_client.chat.completions.create = AsyncMock(
-        return_value=_mock_openai_response()
-    )
+    mock_client.chat.completions.parse = AsyncMock(return_value=_mock_openai_response())
     with patch("tinbox.core.translation.openai.AsyncOpenAI", return_value=mock_client):
         yield mock_client
 
@@ -156,7 +154,7 @@ async def test_whitespace_preservation_complex(
 
 @pytest.mark.asyncio
 async def test_error_handling(translator: OpenAITranslator, mock_openai_client):
-    mock_openai_client.chat.completions.create = AsyncMock(
+    mock_openai_client.chat.completions.parse = AsyncMock(
         side_effect=RuntimeError("API error")
     )
     request = TranslationRequest(
@@ -242,10 +240,10 @@ async def test_malformed_image(translator: OpenAITranslator, mock_openai_client)
 
 @pytest.mark.asyncio
 async def test_empty_choices(translator: OpenAITranslator, mock_openai_client):
-    mock_openai_client.chat.completions.create = AsyncMock(
+    mock_openai_client.chat.completions.parse = AsyncMock(
         return_value=_mock_openai_response()
     )
-    resp = mock_openai_client.chat.completions.create.return_value
+    resp = mock_openai_client.chat.completions.parse.return_value
     resp.choices = []
 
     request = TranslationRequest(
@@ -263,7 +261,7 @@ async def test_empty_choices(translator: OpenAITranslator, mock_openai_client):
 
 @pytest.mark.asyncio
 async def test_invalid_json_response(translator: OpenAITranslator, mock_openai_client):
-    mock_openai_client.chat.completions.create = AsyncMock(
+    mock_openai_client.chat.completions.parse = AsyncMock(
         return_value=_mock_openai_response(content="Plain text, not JSON")
     )
     request = TranslationRequest(
@@ -283,7 +281,7 @@ async def test_invalid_json_response(translator: OpenAITranslator, mock_openai_c
 async def test_missing_translation_field(
     translator: OpenAITranslator, mock_openai_client
 ):
-    mock_openai_client.chat.completions.create = AsyncMock(
+    mock_openai_client.chat.completions.parse = AsyncMock(
         return_value=_mock_openai_response(content='{"text": "wrong field"}')
     )
     request = TranslationRequest(
@@ -316,7 +314,7 @@ async def test_no_model_name(translator: OpenAITranslator, mock_openai_client):
 
 @pytest.mark.asyncio
 async def test_glossary_extension(translator: OpenAITranslator, mock_openai_client):
-    mock_openai_client.chat.completions.create = AsyncMock(
+    mock_openai_client.chat.completions.parse = AsyncMock(
         return_value=_mock_openai_response(
             content='{"translation": "Bonjour", "glossary_extension": [{"term": "AI", "translation": "IA"}]}'
         )
@@ -358,7 +356,7 @@ async def test_ollama_uses_correct_base_url(translator: OpenAITranslator):
     """Test that Ollama requests use the OpenAI-compatible base URL."""
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response()
         )
         mock_cls.return_value = mock_client
@@ -386,7 +384,7 @@ async def test_ollama_zero_cost(translator: OpenAITranslator):
     """Test that Ollama translations have zero cost."""
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response()
         )
         mock_cls.return_value = mock_client
@@ -409,7 +407,7 @@ async def test_gemini_uses_correct_base_url(translator: OpenAITranslator):
     """Test that Gemini requests use the Google OpenAI-compatible base URL."""
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response()
         )
         mock_cls.return_value = mock_client
@@ -439,7 +437,7 @@ async def test_reasoning_effort_passed(translator: OpenAITranslator):
     """Test that reasoning_effort is passed to the OpenAI call."""
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response(content='{"translation": "Hola!"}')
         )
         mock_cls.return_value = mock_client
@@ -457,7 +455,7 @@ async def test_reasoning_effort_passed(translator: OpenAITranslator):
         await translator.translate(request)
 
         # Verify reasoning_effort was passed
-        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        call_kwargs = mock_client.chat.completions.parse.call_args.kwargs
         assert call_kwargs["reasoning_effort"] == "high"
 
 
@@ -466,7 +464,7 @@ async def test_reasoning_effort_minimal_not_passed(translator: OpenAITranslator)
     """Test that minimal reasoning_effort is not passed (default behavior)."""
     with patch("tinbox.core.translation.openai.AsyncOpenAI") as mock_cls:
         mock_client = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(
+        mock_client.chat.completions.parse = AsyncMock(
             return_value=_mock_openai_response(content='{"translation": "Hola!"}')
         )
         mock_cls.return_value = mock_client
@@ -483,7 +481,7 @@ async def test_reasoning_effort_minimal_not_passed(translator: OpenAITranslator)
         )
         await translator.translate(request)
 
-        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        call_kwargs = mock_client.chat.completions.parse.call_args.kwargs
         assert "reasoning_effort" not in call_kwargs
 
 
