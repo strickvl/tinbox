@@ -9,6 +9,9 @@ on:
 
 jobs:
   test:
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -48,6 +51,7 @@ jobs:
         if: matrix.python-version == '3.12'
         with:
           files: ./coverage.xml
+          use_oidc: true
           fail_ci_if_error: false
 
   lint:
