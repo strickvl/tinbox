@@ -561,10 +561,8 @@ def create_windows(
         if end == len(text):
             break
 
-        # Move start position, ensuring we make progress
-        start = end - min(overlap_size, end - start)
-        if start <= 0 or start >= end:
-            break
+        # Move start position for next window
+        start = end - overlap_size
 
     logger.debug(f"Created {len(windows)} windows")
     return windows
