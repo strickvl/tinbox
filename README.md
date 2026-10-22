@@ -216,7 +216,7 @@ tinbox translate ./examples/elara_story.txt --from en --to de \
 tinbox review elara.de.review.json --output elara.de.review.html
 ```
 
-Open `elara.de.review.html` in a browser to inspect every chunk beside its translation. Report generation runs offline and needs no API key. These are paired translation chunks, not aligned sentences or an automated quality assessment. TypeSafe annotations are not included.
+Open `elara.de.review.html` in a browser to inspect every chunk beside its translation. Report generation runs offline and needs no API key. These are paired translation chunks, not aligned sentences or an automated quality assessment.
 
 To compare smaller sentence groups, prepare a separate matching file:
 
@@ -230,7 +230,19 @@ tinbox review elara.de.review.json --matches elara.de.matches.json \
 
 `prepare-matches` starts with every chunk marked unchecked. It does not run a sentence aligner or call a model. Curated groups can pair one source sentence with several translated sentences, or the reverse. Leave ambiguous regions unchecked. The report distinguishes matched groups from unchecked regions and retains each full chunk pair for reference. Matching describes which text to compare, not whether the translation is correct.
 
-Pair export supports fresh `.txt` translations in context-aware mode. Use new paths for the review JSON, matching JSON, and HTML files. The bundle and report contain the document text, so share them only with people who should see that content. See the [translation review guide](docs/translation-review.md) for Arabic examples, matching instructions, checkpoint restrictions, file formats, and troubleshooting.
+To add optional TypeSafe checks, first export `TYPESAFE_API_KEY` in your shell, then run a separate annotation command:
+
+```bash
+tinbox annotate-review elara.de.review.json --matches elara.de.matches.json \
+  --output elara.de.annotations.json
+
+tinbox review elara.de.review.json --matches elara.de.matches.json \
+  --annotations elara.de.annotations.json --output elara.de.annotated.html
+```
+
+`annotate-review` sends only matched source and translation text, language codes, and three fixed questions to TypeSafe. Unchecked groups are skipped. The checks look for changes to participant roles, certainty, and quantifiers using `jev-1.14.0` by default. They can miss errors, and a low score is not a quality pass. Translation text is never changed. The second command reads saved results entirely offline. See [TypeSafe setup and limits](docs/translation-review.md#add-optional-typesafe-annotations) for explicit `.env` loading, request limits, and partial failures.
+
+Pair export supports fresh `.txt` translations in context-aware mode. Use new paths for the review JSON, matching JSON, annotations JSON, and HTML files. The bundle, annotations, and report contain document text, so share them only with people who should see that content. See the [translation review guide](docs/translation-review.md) for Arabic examples, matching instructions, checkpoint restrictions, file formats, and troubleshooting.
 
 ## 💡 Best Practices
 

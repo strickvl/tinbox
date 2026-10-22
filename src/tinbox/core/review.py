@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -20,6 +21,7 @@ from pydantic import (
 )
 
 if TYPE_CHECKING:
+    from tinbox.core.review_annotations import AnnotationGroup, ReviewAnnotations
     from tinbox.core.review_matches import ChunkMatches, ReviewMatches
 
 
@@ -136,7 +138,12 @@ def _render_pair(
 
 
 def _render_matched_chunk(
-    pair: ReviewPair, matches: ChunkMatches, source_lang: str, target_lang: str
+    pair: ReviewPair,
+    matches: ChunkMatches,
+    source_lang: str,
+    target_lang: str,
+    annotations: dict[tuple[int, int], AnnotationGroup] | None = None,
+    threshold: float = 0.70,
 ) -> str:
     groups = []
     for index, group in enumerate(matches.groups, 1):
@@ -158,10 +165,16 @@ def _render_matched_chunk(
         missing_note = (
             f'<p class="match-reason">{" ".join(missing)}</p>' if missing else ""
         )
+        annotation = (
+            _render_annotation(annotations[(pair.unit_id, index)], threshold)
+            if annotations is not None
+            else ""
+        )
         groups.append(f"""<div class="match-group {group.status}" id="chunk-{pair.unit_id}-group-{index}">
     <h3 class="match-heading"><a href="#chunk-{pair.unit_id}-group-{index}">Group {index}</a> · {label}</h3>
     {reason}{missing_note}
     {_render_pair(source, translation, source_lang, target_lang)}
+    {annotation}
   </div>""")
     original = _render_pair(pair.source, pair.translation, source_lang, target_lang)
     return f"""<section class="chunk" id="chunk-{pair.unit_id}">
@@ -174,8 +187,91 @@ def _render_matched_chunk(
 </section>"""
 
 
+def _render_annotation(row: AnnotationGroup, threshold: float) -> str:
+    from tinbox.core.review_annotations import annotation_scores
+
+    scores = annotation_scores(row)
+    if row.status == "completed":
+        concern = any(score >= threshold for score in scores.values())
+        label = "TypeSafe concern" if concern else "No concern flagged by these checks"
+        state = "concern" if concern else "completed"
+        labels = {
+            "participants": "Participant roles",
+            "certainty": "Certainty",
+            "quantifiers": "Quantifiers",
+        }
+        score_list = "".join(
+            f"<div><dt>{label}</dt><dd>{scores[key]!r}</dd></div>"
+            for key, label in labels.items()
+        )
+        body = f'<dl class="annotation-scores">{score_list}</dl>'
+    else:
+        state = row.status
+        label = {
+            "skipped_unchecked": "Not assessed: unchecked match",
+            "error": "Request failed",
+            "not_attempted": "Not attempted",
+        }[row.status]
+        errors = {
+            "authentication_error": "Authentication failed. Check TYPESAFE_API_KEY.",
+            "rate_limited": "TypeSafe limited this request. Try again later.",
+            "service_error": "TypeSafe returned a service error.",
+            "transport_error": "The request could not complete; its remote outcome may be unknown.",
+            "invalid_response": "TypeSafe returned a response Tinbox could not validate.",
+            "interrupted_outcome_unknown": "The request was interrupted; its remote outcome is unknown.",
+        }
+        body = (
+            f'<p dir="auto">{escape(errors[row.error])} ({escape(row.error)})</p>'
+            if row.error
+            else ""
+        )
+    return f"""<aside class="annotation {state}" aria-label="TypeSafe annotation">
+      <p class="annotation-label">{label}</p>{body}
+    </aside>"""
+
+
+def _render_annotation_summary(annotations: ReviewAnnotations) -> str:
+    from tinbox.core.review_annotations import annotation_scores
+
+    completed = sum(row.status == "completed" for row in annotations.groups)
+    flagged = sum(
+        any(score >= annotations.threshold for score in annotation_scores(row).values())
+        for row in annotations.groups
+        if row.status == "completed"
+    )
+    skipped = sum(row.status == "skipped_unchecked" for row in annotations.groups)
+    errors = sum(row.status == "error" for row in annotations.groups)
+    error_label = "request error" if errors == 1 else "request errors"
+    not_attempted = sum(row.status == "not_attempted" for row in annotations.groups)
+    definitions = escape(
+        json.dumps(annotations.questions, ensure_ascii=False, indent=2)
+    )
+    return f"""<section class="annotation-summary" aria-label="TypeSafe review summary">
+      <h2>Optional TypeSafe checks</h2>
+      <p><strong>{completed} completed · {flagged} flagged · {skipped} skipped unchecked · {errors} {error_label} · {not_attempted} not attempted.</strong></p>
+      <p>Scores estimate the probability that a participant role, certainty, or quantifier changed.
+        Higher scores suggest a possible change, not its severity. A score at or above {annotations.threshold!r} flags a concern.
+        This experimental threshold is not a translation quality score or a pass result.
+        These limited checks can miss errors. Review the text yourself even when no concern is flagged.</p>
+      <details>
+        <summary>TypeSafe model, timing, and check definitions</summary>
+        <dl>
+          <div><dt>Model</dt><dd dir="auto">{escape(annotations.model_name)}</dd></div>
+          <div><dt>Started (UTC)</dt><dd>{annotations.created_at.isoformat()}</dd></div>
+          <div><dt>Completed (UTC)</dt><dd>{annotations.completed_at.isoformat()}</dd></div>
+          <div><dt>Concern threshold</dt><dd>{annotations.threshold!r}</dd></div>
+        </dl>
+        <pre class="check-definitions" dir="auto">{definitions}</pre>
+      </details>
+    </section>"""
+
+
 def write_review_report(
-    bundle: ReviewBundle, path: Path, *, matches: ReviewMatches | None = None
+    bundle: ReviewBundle,
+    path: Path,
+    *,
+    matches: ReviewMatches | None = None,
+    annotations: ReviewAnnotations | None = None,
 ) -> None:
     """Write a self-contained HTML report without calling a model or modifying text."""
     source_lang = escape(bundle.source_lang, quote=True)
@@ -184,12 +280,35 @@ def write_review_report(
         from tinbox.core.review_matches import validate_matches
 
         validate_matches(bundle, matches)
+    annotation_rows = None
+    annotation_summary = ""
+    if annotations is not None:
+        from tinbox.core.review_annotations import validate_annotations
+
+        if matches is None:
+            raise ValueError("TypeSafe annotations require their matching file")
+        validate_annotations(bundle, matches, annotations)
+        annotation_rows = {
+            (row.unit_id, row.group_index): row for row in annotations.groups
+        }
+        annotation_summary = _render_annotation_summary(annotations)
+    assessment_notice = (
+        "Saved TypeSafe annotations appear separately below each group. "
+        "They are limited checks for human review, not a quality verdict."
+        if annotations is not None
+        else "No automated quality assessment has been performed."
+    )
     sections = []
     for index, pair in enumerate(bundle.pairs):
         if matches is not None:
             sections.append(
                 _render_matched_chunk(
-                    pair, matches.chunks[index], source_lang, target_lang
+                    pair,
+                    matches.chunks[index],
+                    source_lang,
+                    target_lang,
+                    annotation_rows,
+                    annotations.threshold if annotations is not None else 0.70,
                 )
             )
             continue
@@ -199,7 +318,7 @@ def write_review_report(
 </section>""")
     notice = f"""<strong>{len(bundle.pairs)} paired chunks.</strong> Read each source chunk beside its translation.
       These are the chunks used during translation, not aligned sentences.
-      No automated quality assessment has been performed."""
+      {assessment_notice}"""
     details = [
         ("Source file", bundle.source_name),
         ("Languages", f"{bundle.source_lang} → {bundle.target_lang}"),
@@ -231,7 +350,7 @@ def write_review_report(
         notice = f"""<strong>{matched_count} matched {group_label} · {unchecked_count} unchecked {region_label}.</strong>
       Matched groups are selected for comparison, not certified as correct translations.
       Unchecked regions remain visible. {provenance}
-      No automated quality assessment has been performed."""
+      {assessment_notice}"""
         details.extend(
             [
                 ("Match provenance", provenance),
@@ -288,6 +407,16 @@ def write_review_report(
     .match-reason {{ margin: 0; padding: .6rem 1.25rem 0; color: #425866; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }}
     .original-chunk {{ margin: 0; border-top: 1px solid #d7e0e4; }}
     .original-chunk summary {{ padding: .8rem 1.25rem; color: #425866; }}
+    .annotation-summary {{ margin-top: 1.25rem; border: 1px solid #d7e0e4; border-radius: .6rem; padding: 1rem 1.25rem; background: #fff; line-height: 1.6; }}
+    .annotation-summary h2 {{ padding: 0; background: transparent; font-size: 1rem; }}
+    .annotation {{ margin: 0 1.25rem 1.25rem; padding: .8rem 1rem; background: #f4f7f8; border-left: 3px solid #8c9ca5; line-height: 1.6; }}
+    .annotation.concern {{ background: #fff2dd; border-color: #a56d16; }}
+    .annotation.error {{ background: #fbeeed; border-color: #a65049; }}
+    .annotation p {{ margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }}
+    .annotation-label {{ font-weight: 600; }}
+    .annotation-scores {{ margin: .5rem 0 0; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .5rem; }}
+    .annotation-scores dd {{ font-variant-numeric: tabular-nums; }}
+    .check-definitions {{ white-space: pre-wrap; overflow-wrap: anywhere; font-size: .85rem; }}
     footer {{ color: #425866; font-size: .85rem; line-height: 1.6; }}
     @media (max-width: 44rem) {{
       body {{ padding: 1.25rem .75rem 2rem; }}
@@ -304,6 +433,7 @@ def write_review_report(
     <h1>Translation review</h1>
     <p class="filename" dir="auto">{escape(bundle.source_name)}</p>
     <p class="notice">{notice}</p>
+    {annotation_summary}
     <details>
       <summary>Translation details</summary>
       <dl>{metadata}</dl>

@@ -1,6 +1,6 @@
 # Translation review pilot
 
-This pilot uses real Tinbox CLI translations into German and Arabic, followed by assistant-curated sentence matching and offline reports. It makes no TypeSafe calls and does not assess translation quality.
+This pilot uses real Tinbox CLI translations into German and Arabic, followed by assistant-curated sentence matching and offline reports. The initial translation and matching stage made no TypeSafe calls. A later opt-in annotation run, recorded below, adds limited review hints without changing either translation.
 
 The input is the first 12 double-newline-separated paragraphs of `examples/elara_story.txt`, including the heading and final double newline. The excerpt has 2,180 characters and 2,230 UTF-8 bytes. Each run saves its own exact source, the original example's fingerprint and the excerpt range.
 
@@ -109,4 +109,45 @@ The full repository suite passed with 570 tests, together with Ruff lint, Ruff f
 
 The pilot also exposed and verified a provider fix: ordinary OpenAI-compatible requests now omit an unspecified output-token limit instead of always requesting 100,000 tokens. Explicit limits still work, and TranslateGemma keeps its 2,048-token default.
 
-TypeSafe annotations remain a separate follow-up. Before interpreting annotation results, a bilingual reviewer should inspect these groups and add examples with genuinely ambiguous correspondence.
+Before interpreting annotation results, a bilingual reviewer should inspect these groups and add examples with genuinely ambiguous correspondence.
+
+## Opt-in TypeSafe annotation run
+
+The separate annotation run completed on 22 October 2026 at 22:07 CEST (Europe/Amsterdam). Open the [annotated German report](runs/2026-10-22-elara-cli-03/de.annotated.html) or [annotated Arabic report](runs/2026-10-22-elara-cli-03/ar.annotated.html). The original unannotated reports above remain intact.
+
+Each matched group received one request to `jev-1.14.0` with the three fixed checks for participant roles, certainty and quantifiers. The requests contained only the group's exact source and translation spans and their language codes. Both unchecked headings were excluded. There were no automatic retries.
+
+| Target | Completed requests | Unchecked groups skipped | Request failures | Concerns at 0.70 | Input / output tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| German | 34 | 1 | 0 | 0 | 31,586 / 1,836 |
+| Arabic | 31 | 1 | 0 | 0 | 29,431 / 1,674 |
+
+These are provider-reported usage totals for the successful requests. No claim about billed cost is inferred from them. The complete two-language run, including offline rendering and text verification, took 20.65 seconds in this execution; this is one observed run, not a performance benchmark.
+
+No score reached the fixed `0.70` concern threshold. The highest individual scores were `0.24` for German and `0.39` for Arabic. These outcomes are **No concern flagged by these checks**, not a translation-quality pass. The excerpt has no adjudicated quality labels and no planted errors. It cannot measure accuracy or establish that the texts are error-free.
+
+`de.annotations.json` and `ar.annotations.json` preserve exact requests, complete successful responses, model, timestamps and usage. [annotation-run.json](runs/2026-10-22-elara-cli-03/annotation-run.json) records the CLI commands, code fingerprints and verification results. Every annotation was validated against its bundle and matching file. All 76 German and 70 Arabic HTML text blocks still match the original reports exactly, and the original source, translation, bundle and matching file hashes are unchanged. No credentials are stored in these artifacts.
+
+The live commands used `--timeout 20 --max-groups 40` for each language. To run again, explicitly export `TYPESAFE_API_KEY` as described in the [guide](../../docs/translation-review.md#add-optional-typesafe-annotations), then choose new output paths. Each rerun makes new paid requests; there is no automatic resume:
+
+```bash
+pilot_run=benchmarks/translation_review_pilot/runs/2026-10-22-elara-cli-03
+
+tinbox annotate-review "$pilot_run/de.review.json" --matches "$pilot_run/de.matches.json" \
+  --timeout 20 --max-groups 40 --output /tmp/elara-de-new.annotations.json
+
+tinbox annotate-review "$pilot_run/ar.review.json" --matches "$pilot_run/ar.matches.json" \
+  --timeout 20 --max-groups 40 --output /tmp/elara-ar-new.annotations.json
+```
+
+Rendering the saved annotations requires no API key or network access:
+
+```bash
+tinbox review "$pilot_run/de.review.json" --matches "$pilot_run/de.matches.json" \
+  --annotations "$pilot_run/de.annotations.json" --output /tmp/elara-de-annotated.html
+
+tinbox review "$pilot_run/ar.review.json" --matches "$pilot_run/ar.matches.json" \
+  --annotations "$pilot_run/ar.annotations.json" --output /tmp/elara-ar-annotated.html
+```
+
+The annotation implementation passed the full 678-test suite, Ruff lint and formatting, and ty. An independent review found no actionable issues, and an import check succeeded with optional provider SDKs and `httpx` unavailable. Browser layout was not visually checked in this run; text preservation and outcome labels were checked programmatically.

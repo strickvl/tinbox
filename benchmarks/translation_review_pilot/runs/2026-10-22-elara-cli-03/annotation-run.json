@@ -1,0 +1,80 @@
+{
+  "started_at": "2026-10-22T20:07:12.906290+00:00",
+  "status": "completed",
+  "languages": {
+    "de": {
+      "returncode": 0,
+      "command": [
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/.venv/bin/tinbox",
+        "annotate-review",
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/benchmarks/translation_review_pilot/runs/2026-10-22-elara-cli-03/de.review.json",
+        "--matches",
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/benchmarks/translation_review_pilot/runs/2026-10-22-elara-cli-03/de.matches.json",
+        "--output",
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/benchmarks/translation_review_pilot/runs/2026-10-22-elara-cli-03/de.annotations.json",
+        "--max-groups",
+        "40",
+        "--timeout",
+        "20"
+      ],
+      "completed": 34,
+      "skipped_unchecked": 1,
+      "error": 0,
+      "not_attempted": 0,
+      "flagged": [],
+      "input_tokens": 31586,
+      "output_tokens": 1836,
+      "original_sha256_unchanged": {
+        "source.txt": "b2a743cdca2436dce3a092bb95c7a8f6a84392fd381d5a4e7a928d1f79dc4c5d",
+        "de.txt": "272d1a43fb98a9aeecd62c38dad892811ec1d3f1a939e6a2ebbe99aec11fbcfd",
+        "de.review.json": "7d8a7ad58b2512480c69f774b1522f089850dc563520953cd958ee4aa4bff5c9",
+        "de.matches.json": "0168a084a737f051ea4bc4bf9bb55c4f7813c8d9526b6eef0c6e8ab3147a26c9"
+      },
+      "annotations_sha256": "39ce35823da3dde51b73e2da451af3f89d691fbad6013f87b4e5d88a603054c2",
+      "report_sha256": "18888b1aa13435fab91cf1be5f17bf9c5860028b047769770e7bf40b739f3982",
+      "html_text_blocks_verified": 76,
+      "unchecked_requests": 0
+    },
+    "ar": {
+      "returncode": 0,
+      "command": [
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/.venv/bin/tinbox",
+        "annotate-review",
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/benchmarks/translation_review_pilot/runs/2026-10-22-elara-cli-03/ar.review.json",
+        "--matches",
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/benchmarks/translation_review_pilot/runs/2026-10-22-elara-cli-03/ar.matches.json",
+        "--output",
+        "/Users/strickvl/.codex/worktrees/642e/tinbox/benchmarks/translation_review_pilot/runs/2026-10-22-elara-cli-03/ar.annotations.json",
+        "--max-groups",
+        "40",
+        "--timeout",
+        "20"
+      ],
+      "completed": 31,
+      "skipped_unchecked": 1,
+      "error": 0,
+      "not_attempted": 0,
+      "flagged": [],
+      "input_tokens": 29431,
+      "output_tokens": 1674,
+      "original_sha256_unchanged": {
+        "source.txt": "b2a743cdca2436dce3a092bb95c7a8f6a84392fd381d5a4e7a928d1f79dc4c5d",
+        "ar.txt": "eace7f26b1d955edefbe0897b6905b99049bee77fc9a4ec85e3d935ab9754748",
+        "ar.review.json": "1db4c1120ba2333e711065867a36dbf5c518f4558c90a7c9ce03289686b5ea11",
+        "ar.matches.json": "474417b465a0cf06f0956aaeccdc0ac43483602137ee8c3db34434ef8f59244d"
+      },
+      "annotations_sha256": "e1b71fa8b87c29c0e788088ee38774663e00bb48376272696c3058ff9640624d",
+      "report_sha256": "ffb7a58e87aedfa5d71fe10b964dc87d6a13c3738070cec81ca80fd01ede44da",
+      "html_text_blocks_verified": 70,
+      "unchecked_requests": 0
+    }
+  },
+  "code_sha256": {
+    "src/tinbox/cli.py": "9e98c08b5752aeb1fad5e99ccdee86ba5bee6cda9687093770e122f61c2fba10",
+    "src/tinbox/core/review.py": "bd2d9682e8ab34dad20879a809658dee311c2e8d9d68991728f0224f3533031c",
+    "src/tinbox/core/review_annotations.py": "a247ecf8bbd4475569bcce5e1e7b3ec5a665e928389af007e29500554a885a18",
+    "src/tinbox/core/review_questions.py": "a4ea37b00fec298c75db83b238b19222bd54c4d4d974a97c2eefe80869116261"
+  },
+  "browser_layout_verified": false,
+  "completed_at": "2026-10-22T20:07:33.560519+00:00"
+}
