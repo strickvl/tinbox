@@ -1,8 +1,8 @@
 import re
 
 
-def extract_whitespace_formatting(content: str) -> tuple[str, str, str]:
-    """Extract prefix, core content, and suffix from text.
+def extract_whitespace_formatting[T](content: T) -> tuple[str, T | str, str]:
+    """Extract prefix, core content, and suffix; pass non-text values through.
 
     Args:
         content: Input text content

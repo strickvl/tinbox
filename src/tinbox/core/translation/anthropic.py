@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from anthropic import AsyncAnthropic as AnthropicClient
 
 from tinbox.core.cost import calculate_usage_cost
 from tinbox.core.translation._shared import (
@@ -31,8 +34,8 @@ from tinbox.utils.logging import get_logger
 try:
     from anthropic import AsyncAnthropic, RateLimitError
 except ImportError:
-    AsyncAnthropic = None  # type: ignore[assignment, misc]
-    RateLimitError = None  # type: ignore[assignment, misc]
+    AsyncAnthropic = None
+    RateLimitError = None
 
 logger = get_logger(__name__)
 
@@ -44,13 +47,14 @@ _THINKING_BUDGETS: dict[str, int] = {
 }
 
 
-def _check_anthropic_installed() -> None:
+def _check_anthropic_installed() -> type[AnthropicClient]:
     """Raise a clear error if the anthropic package is not installed."""
     if AsyncAnthropic is None:
         raise TranslationError(
             "Anthropic support is not installed. "
             "Install with: pip install tinbox[anthropic] or pip install tinbox[all]"
         )
+    return AsyncAnthropic
 
 
 completion_with_retry = build_retry_decorator(RateLimitError, logger)
@@ -95,13 +99,13 @@ class AnthropicTranslator(ModelInterface):
     ) -> None:
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self._client: AsyncAnthropic | None = None  # type: ignore[assignment]
+        self._client: AnthropicClient | None = None
 
-    def _get_client(self) -> AsyncAnthropic:  # type: ignore[return]
+    def _get_client(self) -> AnthropicClient:
         """Get or create an AsyncAnthropic client."""
-        _check_anthropic_installed()
+        client_class = _check_anthropic_installed()
         if self._client is None:
-            self._client = AsyncAnthropic()
+            self._client = client_class()
         return self._client
 
     def _build_content_blocks(
@@ -127,6 +131,8 @@ class AnthropicTranslator(ModelInterface):
             blocks.append({"type": "text", "text": glossary_text})
 
         if request.content_type.startswith("text/"):
+            if not isinstance(clean_content, str):
+                raise TranslationError("Text content must be a string")
             blocks.append(
                 {
                     "type": "text",
@@ -139,7 +145,9 @@ class AnthropicTranslator(ModelInterface):
                 }
             )
         else:
-            image_b64 = base64.b64encode(clean_content).decode()  # type: ignore[arg-type]
+            if not isinstance(clean_content, bytes):
+                raise TranslationError("Translation failed: Invalid image data")
+            image_b64 = base64.b64encode(clean_content).decode()
             blocks.append(
                 {
                     "type": "image",
@@ -165,7 +173,7 @@ class AnthropicTranslator(ModelInterface):
     @completion_with_retry
     async def _make_completion_request(
         self, request: TranslationRequest, clean_content: str | bytes
-    ):  # type: ignore[no-untyped-def]
+    ):
         """Make a messages API request with retry on rate limits."""
         client = self._get_client()
 
@@ -216,7 +224,7 @@ class AnthropicTranslator(ModelInterface):
             content_prefix, clean_content, content_suffix = prep
 
             if request.content_type.startswith("image/"):
-                validate_image_content(clean_content)  # type: ignore[arg-type]
+                validate_image_content(clean_content)
 
             response = await self._make_completion_request(request, clean_content)
 

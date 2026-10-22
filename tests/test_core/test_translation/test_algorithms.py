@@ -95,6 +95,22 @@ def test_config(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    "algorithm", [translate_sliding_window, translate_context_aware]
+)
+async def test_text_algorithms_reject_mixed_pages(
+    algorithm, test_config, mock_translator
+):
+    content = DocumentContent(
+        pages=["Text page", b"image page"], content_type="text/plain"
+    )
+
+    with pytest.raises(TranslationError, match="not supported for image content"):
+        await algorithm(content, test_config, mock_translator)
+
+    mock_translator.translate.assert_not_awaited()
+
+
 async def test_translate_page_by_page_with_checkpointing(
     test_content,
     test_config,
@@ -503,13 +519,15 @@ async def test_translate_document_algorithm_routing():
         ValidationError,
         match="Input should be 'page', 'sliding-window' or 'context-aware'",
     ):
-        TranslationConfig(
-            source_lang="en",
-            target_lang="fr",
-            model=ModelType.ANTHROPIC,
-            model_name="claude-3-sonnet",
-            algorithm="unknown-algorithm",
-            input_file=Path("test.txt"),
+        TranslationConfig.model_validate(
+            {
+                "source_lang": "en",
+                "target_lang": "fr",
+                "model": ModelType.ANTHROPIC,
+                "model_name": "claude-3-sonnet",
+                "algorithm": "unknown-algorithm",
+                "input_file": Path("test.txt"),
+            }
         )
 
 

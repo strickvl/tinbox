@@ -94,7 +94,7 @@ def estimate_document_tokens(file_path: Path) -> int:
         # For DOCX, estimate based on word count
         from docx import Document
 
-        doc = Document(file_path)
+        doc = Document(str(file_path))
         word_count = sum(len(p.text.split()) for p in doc.paragraphs)
         # Rough estimate: 1.3 tokens per word, rounded up
         return int(word_count * 1.3 + 0.999)  # Round up by adding 0.999

@@ -571,6 +571,29 @@ def test_pdf_rejects_context_aware_algorithm(cli_runner, tmp_path):
         assert "PDF files only support the 'page' algorithm" in error_message
 
 
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_translate_rejects_invalid_algorithm(cli_runner, tmp_path, dry_run):
+    input_file = tmp_path / "test.txt"
+    input_file.write_text("Test content")
+    args = [
+        "translate",
+        str(input_file),
+        "--model",
+        "openai:gpt-4o",
+        "--algorithm",
+        "invalid",
+    ]
+    if dry_run:
+        args.append("--dry-run")
+
+    with patch("tinbox.cli.estimate_cost") as estimate:
+        result = cli_runner.invoke(app, args)
+
+    assert result.exit_code == 1
+    assert "Invalid translation algorithm 'invalid'" in result.stdout
+    estimate.assert_not_called()
+
+
 def test_translate_reasoning_effort_default(cli_runner, tmp_path):
     """Test that reasoning_effort defaults to minimal."""
     input_file = tmp_path / "test.txt"

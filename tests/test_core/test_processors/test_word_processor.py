@@ -32,7 +32,7 @@ def temp_docx(tmp_path: Path) -> Path:
 
     # Save the document
     file_path = tmp_path / "test.docx"
-    doc.save(file_path)
+    doc.save(str(file_path))
     return file_path
 
 
@@ -84,6 +84,7 @@ async def test_word_processor_rtl_content(processor: WordProcessor, temp_docx: P
 
     assert len(pages) == 1
     content = pages[0]
+    assert isinstance(content, str)
     assert "هذا نص عربي" in content
 
 

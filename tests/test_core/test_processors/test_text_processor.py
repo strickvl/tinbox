@@ -86,6 +86,7 @@ async def test_text_processor_rtl_content(processor: TextProcessor, sample_text:
 
     assert len(pages) == 1
     content = pages[0]
+    assert isinstance(content, str)
     assert "هذا نص عربي" in content
 
 
