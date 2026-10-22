@@ -69,7 +69,7 @@ class OpenAITranslator(ModelInterface):
     def __init__(
         self,
         temperature: float = 0.3,
-        max_tokens: int = 100000,
+        max_tokens: int | None = None,
     ) -> None:
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -147,7 +147,9 @@ class OpenAITranslator(ModelInterface):
                     model=get_model_name(request),
                     prompt=prompt,
                     temperature=self.temperature,
-                    max_tokens=min(self.max_tokens, 2048),
+                    max_tokens=min(self.max_tokens, 2048)
+                    if self.max_tokens is not None
+                    else 2048,
                     stop=["<end_of_turn>", "<eos>"],
                 )
             except Exception as e:
@@ -159,8 +161,9 @@ class OpenAITranslator(ModelInterface):
             "model": get_model_name(request),
             "messages": self._build_messages(request, clean_content),
             "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
         }
+        if self.max_tokens is not None:
+            kwargs["max_tokens"] = self.max_tokens
 
         if request.glossary:
             kwargs["response_format"] = TranslationWithGlossaryResponse

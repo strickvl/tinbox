@@ -15,15 +15,24 @@ from tinbox.core.types import Glossary, GlossaryEntry, ModelType
     "model", [ModelType.OPENAI, ModelType.OLLAMA, ModelType.GEMINI]
 )
 @pytest.mark.parametrize("use_glossary", [False, True])
+@pytest.mark.parametrize("max_tokens", [None, 4096])
 @pytest.mark.asyncio
-async def test_translation_through_real_sdk(model: ModelType, use_glossary: bool):
+async def test_translation_through_real_sdk(
+    model: ModelType, use_glossary: bool, max_tokens: int | None
+):
     requests: list[dict] = []
     translated = {"translation": "Hello, world!"}
     if use_glossary:
         translated["glossary_extension"] = [{"term": "Welt", "translation": "world"}]
 
     def respond(request: httpx.Request) -> httpx.Response:
-        requests.append(json.loads(request.content))
+        body = json.loads(request.content)
+        requests.append(body)
+        if body.get("max_tokens", 0) > 32768:
+            return httpx.Response(
+                400,
+                json={"error": {"message": "max_tokens exceeds the model limit"}},
+            )
         return httpx.Response(
             200,
             json={
@@ -54,7 +63,11 @@ async def test_translation_through_real_sdk(model: ModelType, use_glossary: bool
         base_url="http://test.invalid/v1",
         http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
     ) as client:
-        translator = OpenAITranslator()
+        translator = (
+            OpenAITranslator()
+            if max_tokens is None
+            else OpenAITranslator(max_tokens=max_tokens)
+        )
         translator._clients[model] = client
         response = await translator.translate(
             TranslationRequest(
@@ -74,5 +87,9 @@ async def test_translation_through_real_sdk(model: ModelType, use_glossary: bool
         [GlossaryEntry(term="Welt", translation="world")] if use_glossary else []
     )
     assert len(requests) == 1
+    if max_tokens is None:
+        assert "max_tokens" not in requests[0]
+    else:
+        assert requests[0]["max_tokens"] == max_tokens
     assert requests[0]["response_format"]["type"] == "json_schema"
     assert requests[0]["response_format"]["json_schema"]["strict"] is True
