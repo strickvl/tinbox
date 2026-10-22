@@ -16,6 +16,7 @@
 - `uv run --locked --all-extras pytest tests/test_core/test_cost.py -v`: run focused tests.
 - `uv run --locked --all-extras pytest --cov-report=html`: generate coverage report.
 - Use `uv add` for runtime dependencies and `uv add --dev` for development tools. Include corresponding `uv.lock` changes whenever dependencies change.
+- Dependabot checks Python and GitHub Actions dependencies weekly with a seven-day cooldown for routine updates; security updates bypass the cooldown. Minor/patch updates are grouped, while major updates remain separate.
 
 ## Coding Style & Naming Conventions
 - Python 3.12+ with src-layout imports (`src/tinbox/...`).

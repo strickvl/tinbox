@@ -356,6 +356,8 @@ This installs the project, all provider/document extras, and development tools i
 
 Use `uv add` for runtime dependencies and `uv add --dev` for development tools, and include the resulting `uv.lock` changes with `pyproject.toml`.
 
+Dependabot checks Python packages and GitHub Actions every Monday at 09:00 Europe/Amsterdam. Routine updates wait until releases are at least seven days old, with minor and patch updates grouped per ecosystem and major updates proposed separately. Security updates bypass the cooldown.
+
 ### Code Quality
 
 ```bash
