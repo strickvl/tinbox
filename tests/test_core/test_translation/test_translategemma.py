@@ -81,7 +81,7 @@ async def test_translategemma_real_sdk(text: str, finish_reason: str):
         )
         if not text or finish_reason != "stop":
             with pytest.raises(
-                TranslationError, match="No content|Invalid finish reason"
+                TranslationError, match=r"No content|Invalid finish reason"
             ):
                 await translator.translate(request)
         else:
