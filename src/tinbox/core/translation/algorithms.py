@@ -8,6 +8,7 @@ from datetime import datetime
 from rich.progress import Progress, TaskID
 
 from tinbox.core.processor import DocumentContent
+from tinbox.core.review import ReviewPair
 from tinbox.core.translation.checkpoint import (
     CheckpointManager,
     TranslationState,
@@ -818,12 +819,25 @@ async def translate_context_aware(
         logger.debug(f"Chunks: {chunks}")
         logger.info(f"Created {len(chunks)} chunks using context-aware splitting")
 
+        if config.preserve_review_pairs and not chunks:
+            raise TranslationError(
+                "Review pair preservation requires at least one non-empty source chunk"
+            )
+
         # Check for checkpoint and resume if available
         resume_result = await resume_from_checkpoint(checkpoint_manager, config, chunks)
+        if config.preserve_review_pairs and resume_result.resumed:
+            raise TranslationError(
+                "Review pair preservation requires a fresh translation. "
+                "Choose a new checkpoint directory or omit --checkpoint-dir."
+            )
         total_tokens = resume_result.total_tokens
         total_cost = resume_result.total_cost
 
         translated_chunks = resume_result.translated_items
+        review_pairs: list[ReviewPair] | None = (
+            [] if config.preserve_review_pairs else None
+        )
         previous_chunk: str | None = resume_result.metadata.get("previous_chunk")
         previous_translation: str | None = resume_result.metadata.get(
             "previous_translation"
@@ -887,6 +901,14 @@ async def translate_context_aware(
                 glossary_manager.update_glossary(response.glossary_updates)
 
             translated_chunks.append(response.text)
+            if review_pairs is not None:
+                review_pairs.append(
+                    ReviewPair(
+                        unit_id=i + 1,
+                        source=current_chunk,
+                        translation=response.text,
+                    )
+                )
             total_tokens += response.tokens_used
             total_cost += response.cost
 
@@ -941,6 +963,7 @@ async def translate_context_aware(
             tokens_used=total_tokens,
             cost=total_cost,
             time_taken=time_taken,
+            review_pairs=review_pairs,
         )
 
     except Exception as e:

@@ -6,6 +6,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tinbox.core.review import ReviewPair
 from tinbox.core.types import Glossary, GlossaryEntry, ModelType, TranslationProtocol
 
 
@@ -64,6 +65,10 @@ class TranslationResponse(BaseModel):
     warnings: list[str] = Field(
         default_factory=list,
         description="Non-fatal warnings during translation",
+    )
+    review_pairs: list[ReviewPair] | None = Field(
+        default=None,
+        description="Source and translation chunks captured by an opted-in algorithm",
     )
 
     model_config = ConfigDict(frozen=True)

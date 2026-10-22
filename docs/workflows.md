@@ -45,6 +45,19 @@ The format follows `--format`, not the output filename extension. Create the out
 
 For PDFs, inspect the result for `[TRANSLATION_FAILED: Page N]` markers. A run can write partial results when some pages fail. JSON also records failures in `result.failed_pages`, `result.page_errors`, and `errors`.
 
+## Review a text translation
+
+Save source and translation chunks during a fresh context-aware `.txt` translation, then inspect them in an offline HTML report:
+
+```bash
+tinbox translate document.txt --model "$TINBOX_MODEL" --from en --to de \
+  --output translated.txt --save-review-input translated.review.json
+
+tinbox review translated.review.json --output translated.review.html
+```
+
+The report keeps the translation unchanged. The [translation review guide](translation-review.md) covers German and Arabic examples, manual sentence matching, visible unchecked regions, and optional TypeSafe annotations for matched groups. Matching does not certify translation quality. Only `annotate-review` sends matched text to TypeSafe; preparing a matching draft and rendering saved annotations run offline. Use new output paths for review files, and keep their document contents in mind before sharing them.
+
 ## Split long text
 
 Text and DOCX inputs use `context-aware` by default with the normal chat protocol. Set `--context-size` to a positive target size in characters, not tokens:
@@ -107,6 +120,8 @@ Keep the input and all translation settings unchanged. Checkpoints check the lan
 Checkpoint filenames use only the input's stem, such as `document_checkpoint.json`. Separate directories prevent collisions between inputs such as `document.txt` and `document.pdf`. Use a new checkpoint directory to start over.
 
 Tinbox deletes the checkpoint after writing output and any requested glossary. This cleanup also occurs when a page-based translation writes partial results with failed pages. Inspect the output before treating the document as complete.
+
+Pair export with `--save-review-input` requires a fresh translation and rejects checkpoint resume. Omit that option for ordinary resume, or use a new checkpoint directory and new review output path to translate again. See [review recovery](translation-review.md#file-handling-and-recovery).
 
 ## Preview and limit estimated cost
 

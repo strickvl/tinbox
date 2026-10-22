@@ -1,10 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 (2026-10-22)
 
+- Preserve source and translation pairs with `translate --save-review-input` for fresh, context-aware `.txt` translations. Generate offline side-by-side HTML reports with `tinbox review`, including right-to-left text support.
+- Add `prepare-matches` for unchecked sentence-group drafts. Curated matching files preserve every character and keep ambiguous regions unchecked; Tinbox does not automatically align sentences.
+- Add opt-in `annotate-review` checks through TypeSafe for participant roles, certainty, and quantifiers. Only matched groups are sent. Save responses for offline reports, skip unchecked groups, and retain partial results after a request failure.
+- Keep all review features optional and review-only. TypeSafe scores can miss errors and do not certify translation quality or change the translation. See the [translation review guide](docs/translation-review.md) and [German and Arabic pilot](benchmarks/translation_review_pilot/README.md).
 - Rewrite the README and add provider setup, translation workflows, CLI reference, and contributing guides with current model examples.
 - Use supported reasoning settings and request parameters for GPT-6 and current Claude models. Reduce the default chat output budget to 16,384 tokens, including for Gemini and other compatible endpoints.
 - Require Anthropic SDK 0.88.0 or newer for current Claude request parameters.
+- Refresh locked runtime and development dependencies, including security updates, and add GitHub Actions trusted publishing to PyPI.
+
+### Upgrade
+
+For an existing PyPI tool installation with the desired provider extras and Python 3.12 or newer:
+
+```bash
+uv tool upgrade tinbox
+tinbox --version
+```
+
+When changing extras or Python versions, or replacing a GitHub installation, use `uv tool install --force --python 3.13 "tinbox[all]>=0.3.0"`. TypeSafe annotations need `TYPESAFE_API_KEY` in the environment, with no additional SDK or extra. Offline review reports need no API key.
 
 ## 0.2.0 (2026-10-22)
 

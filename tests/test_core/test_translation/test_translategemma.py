@@ -60,6 +60,7 @@ async def test_translategemma_real_sdk(text: str, finish_reason: str):
         assert "messages" not in body
         assert "response_format" not in body
         assert "reasoning_effort" not in body
+        assert body["max_tokens"] == 2048
         return httpx.Response(200, json=completion_response(text, finish_reason))
 
     async with AsyncOpenAI(

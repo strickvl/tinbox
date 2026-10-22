@@ -1,0 +1,583 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-22T19:30:15Z",
+  "bundle_sha256": "269397f0735ad700ec6474a50fbdd86be0cb495dd0506ec08a920f162df34793",
+  "provenance": "assistant-curated",
+  "chunks": [
+    {
+      "unit_id": 1,
+      "groups": [
+        {
+          "status": "unchecked",
+          "source": [
+            {
+              "start": 0,
+              "end": 36
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 43
+            }
+          ],
+          "reason": "Document heading, not a sentence; left outside sentence review."
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 36,
+              "end": 138
+            }
+          ],
+          "translation": [
+            {
+              "start": 43,
+              "end": 142
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 138,
+              "end": 256
+            }
+          ],
+          "translation": [
+            {
+              "start": 142,
+              "end": 272
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 256,
+              "end": 292
+            }
+          ],
+          "translation": [
+            {
+              "start": 272,
+              "end": 305
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 292,
+              "end": 377
+            }
+          ],
+          "translation": [
+            {
+              "start": 305,
+              "end": 401
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 377,
+              "end": 469
+            }
+          ],
+          "translation": [
+            {
+              "start": 401,
+              "end": 490
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 469,
+              "end": 543
+            }
+          ],
+          "translation": [
+            {
+              "start": 490,
+              "end": 570
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 543,
+              "end": 609
+            }
+          ],
+          "translation": [
+            {
+              "start": 570,
+              "end": 658
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 609,
+              "end": 648
+            }
+          ],
+          "translation": [
+            {
+              "start": 658,
+              "end": 700
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 648,
+              "end": 723
+            }
+          ],
+          "translation": [
+            {
+              "start": 700,
+              "end": 770
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 723,
+              "end": 761
+            }
+          ],
+          "translation": [
+            {
+              "start": 770,
+              "end": 806
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 761,
+              "end": 852
+            }
+          ],
+          "translation": [
+            {
+              "start": 806,
+              "end": 907
+            }
+          ],
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "unit_id": 2,
+      "groups": [
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 0,
+              "end": 101
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 103
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 101,
+              "end": 165
+            }
+          ],
+          "translation": [
+            {
+              "start": 103,
+              "end": 182
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 165,
+              "end": 244
+            }
+          ],
+          "translation": [
+            {
+              "start": 182,
+              "end": 279
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 244,
+              "end": 299
+            }
+          ],
+          "translation": [
+            {
+              "start": 279,
+              "end": 336
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 299,
+              "end": 360
+            }
+          ],
+          "translation": [
+            {
+              "start": 336,
+              "end": 413
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 360,
+              "end": 470
+            }
+          ],
+          "translation": [
+            {
+              "start": 413,
+              "end": 544
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 470,
+              "end": 572
+            }
+          ],
+          "translation": [
+            {
+              "start": 544,
+              "end": 648
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 572,
+              "end": 587
+            }
+          ],
+          "translation": [
+            {
+              "start": 648,
+              "end": 665
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 587,
+              "end": 653
+            }
+          ],
+          "translation": [
+            {
+              "start": 665,
+              "end": 729
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 653,
+              "end": 691
+            }
+          ],
+          "translation": [
+            {
+              "start": 729,
+              "end": 773
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 691,
+              "end": 752
+            }
+          ],
+          "translation": [
+            {
+              "start": 773,
+              "end": 855
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 752,
+              "end": 823
+            }
+          ],
+          "translation": [
+            {
+              "start": 855,
+              "end": 943
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 823,
+              "end": 849
+            }
+          ],
+          "translation": [
+            {
+              "start": 943,
+              "end": 973
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 849,
+              "end": 893
+            }
+          ],
+          "translation": [
+            {
+              "start": 973,
+              "end": 1030
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 893,
+              "end": 949
+            }
+          ],
+          "translation": [
+            {
+              "start": 1030,
+              "end": 1092
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 949,
+              "end": 969
+            }
+          ],
+          "translation": [
+            {
+              "start": 1092,
+              "end": 1121
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 969,
+              "end": 990
+            }
+          ],
+          "translation": [
+            {
+              "start": 1121,
+              "end": 1147
+            }
+          ],
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "unit_id": 3,
+      "groups": [
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 0,
+              "end": 67
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 66
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 67,
+              "end": 87
+            }
+          ],
+          "translation": [
+            {
+              "start": 66,
+              "end": 90
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 87,
+              "end": 166
+            }
+          ],
+          "translation": [
+            {
+              "start": 90,
+              "end": 181
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 166,
+              "end": 208
+            }
+          ],
+          "translation": [
+            {
+              "start": 181,
+              "end": 221
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 208,
+              "end": 250
+            }
+          ],
+          "translation": [
+            {
+              "start": 221,
+              "end": 265
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 250,
+              "end": 338
+            }
+          ],
+          "translation": [
+            {
+              "start": 265,
+              "end": 365
+            }
+          ],
+          "reason": ""
+        }
+      ]
+    }
+  ]
+}

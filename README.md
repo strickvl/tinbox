@@ -8,16 +8,16 @@
 
 Tinbox reads PDFs, Word documents, and text files, then writes translations as text, JSON, or Markdown reports. It splits long text into chunks, can carry context and glossary terms between requests, and saves progress when you enable checkpoints.
 
-[Quick start](#quick-start) · [Providers](docs/providers.md) · [Workflows](docs/workflows.md) · [CLI reference](docs/cli.md) · [Contributing](docs/contributing.md)
+[Quick start](#quick-start) · [Providers](docs/providers.md) · [Workflows](docs/workflows.md) · [CLI reference](docs/cli.md) · [Translation review](docs/translation-review.md) · [Contributing](docs/contributing.md)
 
 ## Quick start
 
 This example translates a short English note into German with [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol). Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and have an OpenAI API key ready. Tinbox requires Python 3.12 or newer.
 
-**Source version:** the modern cloud-model fixes are not in the published 0.2.0 package. From the checkout containing this README, install the current code with:
+Install Tinbox 0.3.0 or newer with OpenAI support:
 
 ```bash
-uv tool install --force --python 3.13 ".[openai]"
+uv tool install --python 3.13 "tinbox[openai]>=0.3.0"
 ```
 
 Set your key, create a sample file, and translate it. These examples use a Bash or Zsh shell and the default OpenAI endpoint; unset `OPENAI_BASE_URL` if you previously configured another server.
@@ -59,8 +59,22 @@ All inputs produce **text, JSON, or a Markdown report**. Tinbox does not export 
 | Translate a PDF | [Install PDF dependencies](docs/providers.md#pdf-requirements), then [translate the document](docs/workflows.md#translate-a-pdf) |
 | Keep terminology consistent | [Load and save a glossary](docs/workflows.md#reuse-a-glossary) |
 | Continue an interrupted job | [Save progress and resume](docs/workflows.md#resume-an-interrupted-translation) |
+| Inspect source and translation side by side | [Opt-in translation review](docs/translation-review.md), with curated sentence matches and optional TypeSafe checks |
 | Save metadata or inspect failed pages | [Choose an output format](docs/workflows.md#choose-an-output-format) |
 | Preview costs or change chunk size | [Translation workflows](docs/workflows.md) |
+
+### Review a text translation
+
+For a fresh context-aware `.txt` translation, preserve the source and translation chunks and render an offline report:
+
+```bash
+tinbox translate document.txt --from en --to de --model openai:gpt-6.1-sol \
+  --output document.de.txt --save-review-input document.de.review.json
+
+tinbox review document.de.review.json --output document.de.review.html
+```
+
+The [translation review guide](docs/translation-review.md) explains how to curate sentence matches, leave ambiguous regions unchecked, and optionally send matched groups to TypeSafe for participant, certainty, and quantifier checks. Reports preserve the translated text; matching and TypeSafe hints do not certify its quality. Only the explicit `annotate-review` command sends text to TypeSafe. Review files contain document text and require new output paths.
 
 ### TranslateGemma with oMLX
 

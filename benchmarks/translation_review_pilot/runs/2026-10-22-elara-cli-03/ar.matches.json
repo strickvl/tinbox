@@ -1,0 +1,559 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-22T19:30:25Z",
+  "bundle_sha256": "cff1b76373d670fa0a5f1b369d293f64606760c08bd13b2bf4d90fdbe125687d",
+  "provenance": "assistant-curated",
+  "chunks": [
+    {
+      "unit_id": 1,
+      "groups": [
+        {
+          "status": "unchecked",
+          "source": [
+            {
+              "start": 0,
+              "end": 36
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 30
+            }
+          ],
+          "reason": "Non-sentential heading; excluded from sentence matching."
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 36,
+              "end": 138
+            }
+          ],
+          "translation": [
+            {
+              "start": 30,
+              "end": 112
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 138,
+              "end": 256
+            }
+          ],
+          "translation": [
+            {
+              "start": 112,
+              "end": 218
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 256,
+              "end": 292
+            }
+          ],
+          "translation": [
+            {
+              "start": 218,
+              "end": 240
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 292,
+              "end": 377
+            }
+          ],
+          "translation": [
+            {
+              "start": 240,
+              "end": 310
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 377,
+              "end": 469
+            }
+          ],
+          "translation": [
+            {
+              "start": 310,
+              "end": 371
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 469,
+              "end": 543
+            }
+          ],
+          "translation": [
+            {
+              "start": 371,
+              "end": 422
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 543,
+              "end": 609
+            }
+          ],
+          "translation": [
+            {
+              "start": 422,
+              "end": 490
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 609,
+              "end": 648
+            }
+          ],
+          "translation": [
+            {
+              "start": 490,
+              "end": 521
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 648,
+              "end": 723
+            }
+          ],
+          "translation": [
+            {
+              "start": 521,
+              "end": 574
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 723,
+              "end": 761
+            }
+          ],
+          "translation": [
+            {
+              "start": 574,
+              "end": 606
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 761,
+              "end": 852
+            }
+          ],
+          "translation": [
+            {
+              "start": 606,
+              "end": 696
+            }
+          ],
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "unit_id": 2,
+      "groups": [
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 0,
+              "end": 101
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 90
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 101,
+              "end": 165
+            }
+          ],
+          "translation": [
+            {
+              "start": 90,
+              "end": 139
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 165,
+              "end": 244
+            }
+          ],
+          "translation": [
+            {
+              "start": 139,
+              "end": 207
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 244,
+              "end": 299
+            }
+          ],
+          "translation": [
+            {
+              "start": 207,
+              "end": 245
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 299,
+              "end": 360
+            }
+          ],
+          "translation": [
+            {
+              "start": 245,
+              "end": 290
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 360,
+              "end": 470
+            }
+          ],
+          "translation": [
+            {
+              "start": 290,
+              "end": 381
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 470,
+              "end": 572
+            }
+          ],
+          "translation": [
+            {
+              "start": 381,
+              "end": 457
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 572,
+              "end": 587
+            }
+          ],
+          "translation": [
+            {
+              "start": 457,
+              "end": 469
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 587,
+              "end": 653
+            }
+          ],
+          "translation": [
+            {
+              "start": 469,
+              "end": 508
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 653,
+              "end": 691
+            }
+          ],
+          "translation": [
+            {
+              "start": 508,
+              "end": 545
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 691,
+              "end": 752
+            }
+          ],
+          "translation": [
+            {
+              "start": 545,
+              "end": 584
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 752,
+              "end": 823
+            }
+          ],
+          "translation": [
+            {
+              "start": 584,
+              "end": 635
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 823,
+              "end": 849
+            }
+          ],
+          "translation": [
+            {
+              "start": 635,
+              "end": 656
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 849,
+              "end": 893
+            }
+          ],
+          "translation": [
+            {
+              "start": 656,
+              "end": 690
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 893,
+              "end": 949
+            }
+          ],
+          "translation": [
+            {
+              "start": 690,
+              "end": 740
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 949,
+              "end": 969
+            }
+          ],
+          "translation": [
+            {
+              "start": 740,
+              "end": 758
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 969,
+              "end": 990
+            }
+          ],
+          "translation": [
+            {
+              "start": 758,
+              "end": 780
+            }
+          ],
+          "reason": ""
+        }
+      ]
+    },
+    {
+      "unit_id": 3,
+      "groups": [
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 0,
+              "end": 67
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 38
+            }
+          ],
+          "reason": ""
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 67,
+              "end": 87
+            },
+            {
+              "start": 87,
+              "end": 166
+            },
+            {
+              "start": 166,
+              "end": 208
+            },
+            {
+              "start": 208,
+              "end": 250
+            }
+          ],
+          "translation": [
+            {
+              "start": 38,
+              "end": 60
+            },
+            {
+              "start": 60,
+              "end": 129
+            },
+            {
+              "start": 129,
+              "end": 164
+            },
+            {
+              "start": 164,
+              "end": 197
+            }
+          ],
+          "reason": "Grouped quoted turn: Arabic moves Lume's speaker attribution before the speech and uses one quotation across four sentences."
+        },
+        {
+          "status": "matched",
+          "source": [
+            {
+              "start": 250,
+              "end": 338
+            }
+          ],
+          "translation": [
+            {
+              "start": 197,
+              "end": 268
+            }
+          ],
+          "reason": ""
+        }
+      ]
+    }
+  ]
+}

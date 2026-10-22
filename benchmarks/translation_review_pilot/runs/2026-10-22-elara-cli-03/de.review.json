@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-22T19:27:56.121059Z",
+  "source_name": "source.txt",
+  "source_sha256": "b2a743cdca2436dce3a092bb95c7a8f6a84392fd381d5a4e7a928d1f79dc4c5d",
+  "source_lang": "en",
+  "target_lang": "de",
+  "provider": "openai",
+  "model_name": "gpt-4.1-mini-2025-04-14",
+  "algorithm": "context-aware",
+  "context_size": 1000,
+  "custom_split_token": null,
+  "use_glossary": false,
+  "reasoning_effort": "minimal",
+  "pairs": [
+    {
+      "unit_id": 1,
+      "source": "# The Girl Who Couldn’t Understand\n\nOnce upon a time, in a valley village surrounded by high green hills, there lived a girl named Elara. She was bright-eyed, quick-footed, and always eager to listen—but there was one trouble that followed her everywhere. She could not understand anyone.  \n\nWhen the baker spoke to her, his words sounded like the rush of wind in the chimney. When the shepherd called from the fields, his voice came across like the bleating of sheep. Even her own mother’s sentences slipped away like drops of rain on stone. Elara nodded and smiled, but she felt lost in a sea of sounds.  \n\nThe villagers thought she was strange. They whispered, they shook their heads, and sometimes they grew impatient. “She does not listen,” they muttered. But Elara *did* listen, harder than anyone else—she simply could not catch the meaning.  \n\n",
+      "translation": "# Das Mädchen, das nicht verstehen konnte\n\nEs war einmal, in einem Tal-Dorf, umgeben von hohen grünen Hügeln, lebte ein Mädchen namens Elara. Sie hatte leuchtende Augen, flinke Füße und war immer begierig zuzuhören – doch es gab ein Problem, das sie überallhin verfolgte. Sie konnte niemanden verstehen.\n\nWenn der Bäcker mit ihr sprach, klangen seine Worte wie das Rauschen des Windes im Schornstein. Wenn der Hirte von den Feldern rief, kam seine Stimme wie das Blöken der Schafe herüber. Selbst die Sätze ihrer eigenen Mutter glitten davon wie Regentropfen auf Stein. Elara nickte und lächelte, doch sie fühlte sich verloren in einem Meer von Geräuschen.\n\nDie Dorfbewohner hielten sie für seltsam. Sie flüsterten, schüttelten die Köpfe und wurden manchmal ungeduldig. „Sie hört nicht zu“, murmelten sie. Aber Elara *hörte* zu, härter als alle anderen – sie konnte die Bedeutung einfach nicht erfassen.  \n\n"
+    },
+    {
+      "unit_id": 2,
+      "source": "One evening, after another long day of confusion, Elara sat by the river at the edge of the village. The sun had gone down, and the water reflected the first stars. She held a small pebble in her hands, as if it could anchor her in silence.  \n\nThat was when a soft shimmer rose from the river mist. A shape gathered—thin as smoke, yet glowing with pale light. It looked like both a man and a cloud, with eyes that sparkled as if they had seen every word ever spoken.  \n\n“Child,” said the figure, in a voice that rang clear inside her head, “why do you sigh so deeply?”  \n\nElara blinked. For the first time in her life, she understood someone perfectly. “You can speak to me?” she gasped.  \n\n“I am a translator of meanings,” the ghostly figure replied. “A genie of tongues, bound not to lamps, but to the longing of hearts. You may call me Lume.”  \n\nElara felt warmth spread through her chest. “Everyone speaks to me, but I cannot grasp their words. They blur together. Can you help me?”  \n\n",
+      "translation": "Eines Abends, nach einem weiteren langen Tag voller Verwirrung, saß Elara am Fluss am Rand des Dorfes. Die Sonne war untergegangen, und das Wasser spiegelte die ersten Sterne wider. Sie hielt einen kleinen Kieselstein in ihren Händen, als könnte er sie in der Stille verankern.\n\nDa stieg ein sanftes Schimmern aus dem Flussnebel empor. Eine Gestalt formte sich – dünn wie Rauch, doch mit blassem Licht leuchtend. Sie sah aus wie ein Mann und eine Wolke zugleich, mit Augen, die funkelten, als hätten sie jedes jemals gesprochene Wort gesehen.\n\n„Kind“, sagte die Gestalt mit einer Stimme, die klar in ihrem Kopf erklang, „warum seufzt du so tief?“\n\nElara blinzelte. Zum ersten Mal in ihrem Leben verstand sie jemanden vollkommen. „Du kannst mit mir sprechen?“ hauchte sie.\n\n„Ich bin eine Übersetzerin der Bedeutungen“, antwortete die geisterhafte Gestalt. „Ein Dschinn der Zungen, nicht an Lampen gebunden, sondern an die Sehnsucht der Herzen. Du darfst mich Lume nennen.“\n\nElara spürte, wie sich Wärme in ihrer Brust ausbreitete. „Jeder spricht zu mir, aber ich kann ihre Worte nicht fassen. Sie verschwimmen ineinander. Kannst du mir helfen?“  \n\n"
+    },
+    {
+      "unit_id": 3,
+      "source": "The genie drifted closer, swirling like mist around her shoulders. “I can,” Lume said. “I can hear their words, shape them, and pass them to you in the way you need. But magic is never given without purpose. You must promise something in return.”  \n\n“What must I promise?” asked Elara, though her heart already leaned forward eagerly.  \n\n",
+      "translation": "Der Dschinn schwebte näher, wirbelte wie Nebel um ihre Schultern. „Ich kann“, sagte Lume. „Ich kann ihre Worte hören, sie formen und dir auf die Weise weitergeben, die du brauchst. Aber Magie wird nie ohne Zweck gegeben. Du musst etwas im Gegenzug versprechen.“  \n\n„Was muss ich versprechen?“ fragte Elara, obwohl ihr Herz bereits eifrig nach vorne geneigt war.  \n\n"
+    }
+  ]
+}
