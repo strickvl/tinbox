@@ -42,7 +42,7 @@ class TranslationConfig(BaseModel):
     target_lang: str
     model: ModelType
     model_name: str = Field(
-        description="Specific model name (e.g., 'gpt-4o' for OpenAI, 'claude-3-sonnet' for Anthropic)",
+        description="Specific model name (e.g., 'gpt-6.1-sol' for OpenAI, 'claude-sonnet-5-5' for Anthropic)",
     )
     algorithm: Literal["page", "sliding-window", "context-aware"]
     input_file: Path
@@ -118,7 +118,7 @@ class TranslationConfig(BaseModel):
     # Model reasoning settings
     reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(
         default="minimal",
-        description="Model reasoning effort level. Higher levels improve quality but increase cost and time significantly.",
+        description="Model reasoning effort level. Provider mapping varies; higher effort may increase time and cost.",
     )
 
     @model_validator(mode="after")

@@ -183,7 +183,7 @@ def translate(
         ...,
         "--model",
         "-m",
-        help="Model to use (e.g., 'openai:gpt-4o', 'anthropic:claude-3-sonnet', 'ollama:mistral-small').",
+        help="Model to use (e.g., 'openai:gpt-6.1-sol', 'anthropic:claude-sonnet-5-5', 'ollama:gemma4:e2b').",
     ),
     algorithm: str | None = typer.Option(
         None,
@@ -259,7 +259,7 @@ def translate(
     reasoning_effort: str = typer.Option(
         "minimal",
         "--reasoning-effort",
-        help="Model reasoning effort level (minimal, low, medium, high). Higher levels improve quality but increase cost and time significantly.",
+        help="Reasoning effort (minimal, low, medium, high). Mapping depends on the model; higher effort may increase time and cost.",
     ),
     pdf_dpi: int = typer.Option(
         200,
