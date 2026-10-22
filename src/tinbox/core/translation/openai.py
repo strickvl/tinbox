@@ -137,7 +137,6 @@ class OpenAITranslator(ModelInterface):
             "messages": self._build_messages(request, clean_content),
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
-            "stream": False,
         }
 
         if request.glossary:
@@ -153,7 +152,7 @@ class OpenAITranslator(ModelInterface):
                 kwargs[k] = v
 
         try:
-            return await client.chat.completions.create(**kwargs)
+            return await client.chat.completions.parse(**kwargs)
         except Exception as e:
             if RateLimitError and isinstance(e, RateLimitError):
                 raise
