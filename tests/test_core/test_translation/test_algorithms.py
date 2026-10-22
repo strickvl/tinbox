@@ -4,6 +4,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import ValidationError
 
 from tinbox.core.processor import DocumentContent
 from tinbox.core.translation.algorithms import (
@@ -325,14 +326,66 @@ async def test_translation_all_pages_fail(
 
 
 # Helper function tests
-def test_create_windows():
+@pytest.mark.parametrize(
+    ("text", "window_size", "overlap_size", "expected"),
+    [
+        ("", 4, 0, []),
+        ("abc", 4, 0, ["abc"]),
+        ("abcd", 4, 0, ["abcd"]),
+        ("abcdefgh", 4, 0, ["abcd", "efgh"]),
+        ("abcdefghij", 4, 0, ["abcd", "efgh", "ij"]),
+        ("abcdefghij", 4, 1, ["abcd", "defg", "ghij"]),
+        ("abcdef", 4, 3, ["abcd", "bcde", "cdef"]),
+    ],
+)
+def test_create_windows(text, window_size, overlap_size, expected):
     """Test window creation for sliding window translation."""
-    text = "This is a test text for window creation."
-    windows = create_windows(text, window_size=10, overlap_size=3)
+    assert create_windows(text, window_size, overlap_size) == expected
 
-    assert len(windows) > 0
-    assert all(isinstance(w, str) for w in windows)
-    assert len(windows[0]) <= 10  # Should not exceed window size
+
+@pytest.mark.parametrize("overlap_size", [-1, 4, 5])
+def test_create_windows_rejects_invalid_overlap(overlap_size):
+    with pytest.raises(ValueError, match="Overlap size"):
+        create_windows("abcdefghij", window_size=4, overlap_size=overlap_size)
+
+
+async def test_translate_sliding_window_without_overlap(tmp_path, mock_translator):
+    config = TranslationConfig(
+        source_lang="en",
+        target_lang="fr",
+        model=ModelType.ANTHROPIC,
+        model_name="claude-3-sonnet",
+        algorithm="sliding-window",
+        input_file=tmp_path / "test.txt",
+        window_size=4,
+        overlap_size=0,
+    )
+    content = DocumentContent(
+        pages=["abcdefghij"],
+        content_type="text/plain",
+        metadata={},
+    )
+
+    async def uppercase(request):
+        return TranslationResponse(
+            text=request.content.upper(),
+            tokens_used=1,
+            cost=0.001,
+            time_taken=0.01,
+        )
+
+    mock_translator.translate.side_effect = uppercase
+
+    result = await translate_sliding_window(content, config, mock_translator)
+
+    assert result.text == "ABCDEFGHIJ"
+
+
+def test_translation_config_rejects_negative_overlap(test_config):
+    with pytest.raises(ValidationError, match="overlap_size"):
+        TranslationConfig.model_validate(
+            test_config.model_dump() | {"overlap_size": -1}
+        )
 
 
 def test_merge_chunks():
@@ -446,8 +499,6 @@ async def test_translate_document_algorithm_routing():
     )
 
     # Test unknown algorithm - should fail at config validation time
-    from pydantic import ValidationError
-
     with pytest.raises(
         ValidationError,
         match="Input should be 'page', 'sliding-window' or 'context-aware'",

@@ -70,7 +70,7 @@ class TranslationConfig(BaseModel):
     )
     overlap_size: int = Field(
         default=200,
-        gt=0,
+        ge=0,
         description="Overlap size for sliding window translation",
     )
 
