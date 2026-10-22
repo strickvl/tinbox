@@ -59,7 +59,7 @@ tinbox = "tinbox.cli:app"
 packages = ["src/tinbox"]
 
 [tool.pytest.ini_options]
-minversion = "8.0"
+minversion = "9.0.3"
 addopts = "-ra -q --cov=tinbox"
 testpaths = ["tests"]
 asyncio_mode = "auto"
