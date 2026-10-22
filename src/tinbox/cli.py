@@ -8,6 +8,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -474,7 +475,7 @@ def doctor(
     report = run_doctor_checks()
 
     if json_output:
-        console.print(report.model_dump_json(indent=2))
+        typer.echo(report.model_dump_json(indent=2))
         return
 
     # Group checks by category
@@ -493,10 +494,15 @@ def doctor(
         table.add_column("Details")
 
         for check in checks:
-            status = "[green]OK[/green]" if check.ok else "[red]MISSING[/red]"
-            details = check.details or ""
+            if check.ok:
+                status = "[green]OK[/green]"
+            elif check.required:
+                status = "[red]MISSING[/red]"
+            else:
+                status = "[yellow]OPTIONAL[/yellow]"
+            details = escape(check.details or "")
             if not check.ok and check.hint:
-                details = f"{details}\n[dim]{check.hint}[/dim]"
+                details = f"{details}\n[dim]{escape(check.hint)}[/dim]"
             table.add_row(check.name, status, details)
 
         console.print(table)
@@ -508,7 +514,7 @@ def doctor(
     elif report.required_ok:
         console.print(
             "[yellow]Core checks passed.[/yellow] Some optional features may be unavailable.\n"
-            "Set API keys for cloud models or install Ollama for local models.\n"
+            "Follow the hints above to enable the optional features you need.\n"
         )
     else:
         console.print(

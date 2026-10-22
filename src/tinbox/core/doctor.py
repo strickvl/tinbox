@@ -2,7 +2,6 @@
 
 import os
 import shutil
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +11,7 @@ class DoctorCheck(BaseModel):
 
     name: str
     category: str
+    required: bool
     ok: bool
     details: str | None = None
     hint: str | None = None
@@ -29,12 +29,8 @@ class DoctorReport(BaseModel):
 
     @property
     def required_ok(self) -> bool:
-        """Return True if all required checks passed (excludes optional API keys and local models)."""
-        optional_categories = {"API Keys", "Local Models", "Model SDKs"}
-        required_checks = [
-            c for c in self.checks if c.category not in optional_categories
-        ]
-        return all(check.ok for check in required_checks)
+        """Return True if all dependencies required for basic use are available."""
+        return all(check.ok for check in self.checks if check.required)
 
 
 def check_poppler() -> DoctorCheck:
@@ -44,12 +40,14 @@ def check_poppler() -> DoctorCheck:
         return DoctorCheck(
             name="poppler-utils",
             category="System Tools",
+            required=False,
             ok=True,
             details=f"Found at {pdfinfo_path}",
         )
     return DoctorCheck(
         name="poppler-utils",
         category="System Tools",
+        required=False,
         ok=False,
         details="Not found in PATH",
         hint="Install poppler: brew install poppler (macOS) or apt-get install poppler-utils (Linux)",
@@ -65,6 +63,7 @@ def check_pdf2image() -> DoctorCheck:
         return DoctorCheck(
             name="pdf2image",
             category="Python Packages",
+            required=False,
             ok=True,
             details=f"Version {version}",
         )
@@ -72,6 +71,7 @@ def check_pdf2image() -> DoctorCheck:
         return DoctorCheck(
             name="pdf2image",
             category="Python Packages",
+            required=False,
             ok=False,
             details="Not installed",
             hint="Install with: pip install tinbox[pdf]",
@@ -87,6 +87,7 @@ def check_python_docx() -> DoctorCheck:
         return DoctorCheck(
             name="python-docx",
             category="Python Packages",
+            required=True,
             ok=True,
             details="Installed",
         )
@@ -94,6 +95,7 @@ def check_python_docx() -> DoctorCheck:
         return DoctorCheck(
             name="python-docx",
             category="Python Packages",
+            required=True,
             ok=False,
             details="Not installed",
             hint="Install with: pip install tinbox[docx]",
@@ -110,6 +112,7 @@ def check_pillow() -> DoctorCheck:
         return DoctorCheck(
             name="Pillow",
             category="Python Packages",
+            required=True,
             ok=True,
             details=f"Version {version}",
         )
@@ -117,6 +120,7 @@ def check_pillow() -> DoctorCheck:
         return DoctorCheck(
             name="Pillow",
             category="Python Packages",
+            required=True,
             ok=False,
             details="Not installed",
             hint="Install with: pip install pillow",
@@ -132,12 +136,14 @@ def check_openai_key() -> DoctorCheck:
         return DoctorCheck(
             name="OPENAI_API_KEY",
             category="API Keys",
+            required=False,
             ok=True,
             details=f"Set ({masked})",
         )
     return DoctorCheck(
         name="OPENAI_API_KEY",
         category="API Keys",
+        required=False,
         ok=False,
         details="Not set",
         hint="Set with: export OPENAI_API_KEY='your-key-here'",
@@ -152,12 +158,14 @@ def check_anthropic_key() -> DoctorCheck:
         return DoctorCheck(
             name="ANTHROPIC_API_KEY",
             category="API Keys",
+            required=False,
             ok=True,
             details=f"Set ({masked})",
         )
     return DoctorCheck(
         name="ANTHROPIC_API_KEY",
         category="API Keys",
+        required=False,
         ok=False,
         details="Not set",
         hint="Set with: export ANTHROPIC_API_KEY='your-key-here'",
@@ -172,12 +180,14 @@ def check_google_key() -> DoctorCheck:
         return DoctorCheck(
             name="GOOGLE_API_KEY",
             category="API Keys",
+            required=False,
             ok=True,
             details=f"Set ({masked})",
         )
     return DoctorCheck(
         name="GOOGLE_API_KEY",
         category="API Keys",
+        required=False,
         ok=False,
         details="Not set",
         hint="Set with: export GOOGLE_API_KEY='your-key-here'",
@@ -193,6 +203,7 @@ def check_openai_sdk() -> DoctorCheck:
         return DoctorCheck(
             name="openai SDK",
             category="Model SDKs",
+            required=False,
             ok=True,
             details=f"Version {version}",
         )
@@ -200,6 +211,7 @@ def check_openai_sdk() -> DoctorCheck:
         return DoctorCheck(
             name="openai SDK",
             category="Model SDKs",
+            required=False,
             ok=False,
             details="Not installed",
             hint="Install with: pip install tinbox[openai] or pip install tinbox[all]",
@@ -215,6 +227,7 @@ def check_anthropic_sdk() -> DoctorCheck:
         return DoctorCheck(
             name="anthropic SDK",
             category="Model SDKs",
+            required=False,
             ok=True,
             details=f"Version {version}",
         )
@@ -222,6 +235,7 @@ def check_anthropic_sdk() -> DoctorCheck:
         return DoctorCheck(
             name="anthropic SDK",
             category="Model SDKs",
+            required=False,
             ok=False,
             details="Not installed",
             hint="Install with: pip install tinbox[anthropic] or pip install tinbox[all]",
@@ -235,12 +249,14 @@ def check_ollama() -> DoctorCheck:
         return DoctorCheck(
             name="Ollama",
             category="Local Models",
+            required=False,
             ok=True,
             details=f"Found at {ollama_path}",
         )
     return DoctorCheck(
         name="Ollama",
         category="Local Models",
+        required=False,
         ok=False,
         details="Not found in PATH",
         hint="Install from: https://ollama.ai (optional, for local models)",
