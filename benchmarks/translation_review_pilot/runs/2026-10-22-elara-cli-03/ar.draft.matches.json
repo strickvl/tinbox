@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-22T19:34:52.020745Z",
+  "bundle_sha256": "cff1b76373d670fa0a5f1b369d293f64606760c08bd13b2bf4d90fdbe125687d",
+  "provenance": "unreviewed",
+  "chunks": [
+    {
+      "unit_id": 1,
+      "groups": [
+        {
+          "status": "unchecked",
+          "source": [
+            {
+              "start": 0,
+              "end": 852
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 696
+            }
+          ],
+          "reason": "Needs manual sentence matching."
+        }
+      ]
+    },
+    {
+      "unit_id": 2,
+      "groups": [
+        {
+          "status": "unchecked",
+          "source": [
+            {
+              "start": 0,
+              "end": 990
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 780
+            }
+          ],
+          "reason": "Needs manual sentence matching."
+        }
+      ]
+    },
+    {
+      "unit_id": 3,
+      "groups": [
+        {
+          "status": "unchecked",
+          "source": [
+            {
+              "start": 0,
+              "end": 338
+            }
+          ],
+          "translation": [
+            {
+              "start": 0,
+              "end": 268
+            }
+          ],
+          "reason": "Needs manual sentence matching."
+        }
+      ]
+    }
+  ]
+}

@@ -218,7 +218,19 @@ tinbox review elara.de.review.json --output elara.de.review.html
 
 Open `elara.de.review.html` in a browser to inspect every chunk beside its translation. Report generation runs offline and needs no API key. These are paired translation chunks, not aligned sentences or an automated quality assessment. TypeSafe annotations are not included.
 
-Pair export supports fresh `.txt` translations in context-aware mode. Use new paths for the review JSON and HTML files. Both files contain the document text, so share them only with people who should see that content. See the [translation review guide](docs/translation-review.md) for Arabic examples, checkpoint restrictions, the bundle format, and troubleshooting.
+To compare smaller sentence groups, prepare a separate matching file:
+
+```bash
+tinbox prepare-matches elara.de.review.json --output elara.de.matches.json
+
+# After curating the sentence groups in the matching file:
+tinbox review elara.de.review.json --matches elara.de.matches.json \
+  --output elara.de.matched.html
+```
+
+`prepare-matches` starts with every chunk marked unchecked. It does not run a sentence aligner or call a model. Curated groups can pair one source sentence with several translated sentences, or the reverse. Leave ambiguous regions unchecked. The report distinguishes matched groups from unchecked regions and retains each full chunk pair for reference. Matching describes which text to compare, not whether the translation is correct.
+
+Pair export supports fresh `.txt` translations in context-aware mode. Use new paths for the review JSON, matching JSON, and HTML files. The bundle and report contain the document text, so share them only with people who should see that content. See the [translation review guide](docs/translation-review.md) for Arabic examples, matching instructions, checkpoint restrictions, file formats, and troubleshooting.
 
 ## 💡 Best Practices
 

@@ -46,6 +46,7 @@ from tinbox.core.review import (
     validate_new_output_path,
     write_review_report,
 )
+from tinbox.core.review_matches import load_matches, save_matches, unchecked_matches
 from tinbox.core.translation import create_translator
 from tinbox.core.translation.checkpoint import CheckpointManager
 from tinbox.core.translation.glossary import GlossaryManager
@@ -562,6 +563,38 @@ def translate(
 
 
 @app.command()
+def prepare_matches(
+    review_input: Path = typer.Argument(
+        ...,
+        help="A JSON bundle created with translate --save-review-input.",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    output: Path = typer.Option(
+        ...,
+        "--output",
+        "-o",
+        help="New JSON matching draft. Every chunk starts unchecked.",
+    ),
+) -> None:
+    """Prepare an offline matching draft for manual curation, without model calls."""
+    try:
+        validate_new_output_path(output, [review_input])
+        bundle = load_review_bundle(review_input)
+        save_matches(unchecked_matches(bundle), output, bundle)
+    except (OSError, ValueError) as e:
+        console.print(f"[red]Could not prepare matching draft:[/red] {escape(str(e))}")
+        raise typer.Exit(1) from e
+    console.print(
+        f"Matching draft saved to {escape(str(output))}. "
+        "Every chunk is unchecked; curate sentence spans before marking matches. "
+        "No automatic alignment or quality assessment was performed."
+    )
+
+
+@app.command()
 def review(
     review_input: Path = typer.Argument(
         ...,
@@ -577,12 +610,25 @@ def review(
         "-o",
         help="New HTML report file. Its parent directory must already exist.",
     ),
+    matches: Path | None = typer.Option(
+        None,
+        "--matches",
+        help="Optional curated sentence-matching JSON for this exact review bundle.",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
 ) -> None:
     """Create an offline side-by-side report for human review, without model calls."""
     try:
-        validate_new_output_path(output, [review_input])
+        protected_paths = [review_input]
+        if matches is not None:
+            protected_paths.append(matches)
+        validate_new_output_path(output, protected_paths)
         bundle = load_review_bundle(review_input)
-        write_review_report(bundle, output)
+        matching = load_matches(matches, bundle) if matches is not None else None
+        write_review_report(bundle, output, matches=matching)
     except (OSError, ValueError) as e:
         console.print(f"[red]Could not create review report:[/red] {escape(str(e))}")
         raise typer.Exit(1) from e

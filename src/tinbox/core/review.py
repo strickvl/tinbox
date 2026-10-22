@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from html import escape
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 
 from pydantic import (
     AwareDatetime,
@@ -18,6 +18,9 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+if TYPE_CHECKING:
+    from tinbox.core.review_matches import ChunkMatches, ReviewMatches
 
 
 class ReviewPair(BaseModel):
@@ -121,21 +124,82 @@ def load_review_bundle(path: Path) -> ReviewBundle:
     return bundle
 
 
-def write_review_report(bundle: ReviewBundle, path: Path) -> None:
+def _render_pair(
+    source: str, translation: str, source_lang: str, target_lang: str
+) -> str:
+    return f"""<div class="pair">
+    <div class="column"><h3>Source <span>{source_lang}</span></h3>
+      <div class="chunk-text" lang="{source_lang}" dir="auto">{escape(source)}</div></div>
+    <div class="column"><h3>Translation <span>{target_lang}</span></h3>
+      <div class="chunk-text" lang="{target_lang}" dir="auto">{escape(translation)}</div></div>
+  </div>"""
+
+
+def _render_matched_chunk(
+    pair: ReviewPair, matches: ChunkMatches, source_lang: str, target_lang: str
+) -> str:
+    groups = []
+    for index, group in enumerate(matches.groups, 1):
+        label = "Matched for comparison" if group.status == "matched" else "Unchecked"
+        source = "".join(pair.source[span.start : span.end] for span in group.source)
+        translation = "".join(
+            pair.translation[span.start : span.end] for span in group.translation
+        )
+        reason = (
+            f'<p class="match-reason" dir="auto">{escape(group.reason)}</p>'
+            if group.reason
+            else ""
+        )
+        missing = []
+        if not group.source:
+            missing.append("No source text in this region.")
+        if not group.translation:
+            missing.append("No translation text in this region.")
+        missing_note = (
+            f'<p class="match-reason">{" ".join(missing)}</p>' if missing else ""
+        )
+        groups.append(f"""<div class="match-group {group.status}" id="chunk-{pair.unit_id}-group-{index}">
+    <h3 class="match-heading"><a href="#chunk-{pair.unit_id}-group-{index}">Group {index}</a> · {label}</h3>
+    {reason}{missing_note}
+    {_render_pair(source, translation, source_lang, target_lang)}
+  </div>""")
+    original = _render_pair(pair.source, pair.translation, source_lang, target_lang)
+    return f"""<section class="chunk" id="chunk-{pair.unit_id}">
+  <h2><a href="#chunk-{pair.unit_id}">Chunk {pair.unit_id}</a></h2>
+  {"\n".join(groups)}
+  <details class="original-chunk">
+    <summary>Full original chunk pair</summary>
+    {original}
+  </details>
+</section>"""
+
+
+def write_review_report(
+    bundle: ReviewBundle, path: Path, *, matches: ReviewMatches | None = None
+) -> None:
     """Write a self-contained HTML report without calling a model or modifying text."""
     source_lang = escape(bundle.source_lang, quote=True)
     target_lang = escape(bundle.target_lang, quote=True)
+    if matches is not None:
+        from tinbox.core.review_matches import validate_matches
+
+        validate_matches(bundle, matches)
     sections = []
-    for pair in bundle.pairs:
+    for index, pair in enumerate(bundle.pairs):
+        if matches is not None:
+            sections.append(
+                _render_matched_chunk(
+                    pair, matches.chunks[index], source_lang, target_lang
+                )
+            )
+            continue
         sections.append(f"""<section class="chunk" id="chunk-{pair.unit_id}">
   <h2><a href="#chunk-{pair.unit_id}">Chunk {pair.unit_id}</a></h2>
-  <div class="pair">
-    <div class="column"><h3>Source <span>{source_lang}</span></h3>
-      <div class="chunk-text" lang="{source_lang}" dir="auto">{escape(pair.source)}</div></div>
-    <div class="column"><h3>Translation <span>{target_lang}</span></h3>
-      <div class="chunk-text" lang="{target_lang}" dir="auto">{escape(pair.translation)}</div></div>
-  </div>
+  {_render_pair(pair.source, pair.translation, source_lang, target_lang)}
 </section>""")
+    notice = f"""<strong>{len(bundle.pairs)} paired chunks.</strong> Read each source chunk beside its translation.
+      These are the chunks used during translation, not aligned sentences.
+      No automated quality assessment has been performed."""
     details = [
         ("Source file", bundle.source_name),
         ("Languages", f"{bundle.source_lang} → {bundle.target_lang}"),
@@ -146,6 +210,37 @@ def write_review_report(bundle: ReviewBundle, path: Path) -> None:
         ("Glossary", "Enabled" if bundle.use_glossary else "Disabled"),
         ("Reasoning effort", bundle.reasoning_effort),
     ]
+    if matches is not None:
+        matched_count = sum(
+            group.status == "matched"
+            for chunk in matches.chunks
+            for group in chunk.groups
+        )
+        unchecked_count = sum(
+            group.status == "unchecked"
+            for chunk in matches.chunks
+            for group in chunk.groups
+        )
+        provenance = {
+            "unreviewed": "Unreviewed draft; no sentence matches have been selected.",
+            "assistant-curated": "Assistant-curated matches; not human-verified.",
+            "human-reviewed": "Human-reviewed matches; this is not a quality verdict.",
+        }[matches.provenance]
+        group_label = "group" if matched_count == 1 else "groups"
+        region_label = "region" if unchecked_count == 1 else "regions"
+        notice = f"""<strong>{matched_count} matched {group_label} · {unchecked_count} unchecked {region_label}.</strong>
+      Matched groups are selected for comparison, not certified as correct translations.
+      Unchecked regions remain visible. {provenance}
+      No automated quality assessment has been performed."""
+        details.extend(
+            [
+                ("Match provenance", provenance),
+                (
+                    "Matches created (UTC)",
+                    matches.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                ),
+            ]
+        )
     if bundle.custom_split_token is not None:
         details.append(
             ("Split token (overrides chunk size)", bundle.custom_split_token)
@@ -187,6 +282,12 @@ def write_review_report(bundle: ReviewBundle, path: Path) -> None:
     h3 {{ margin: 0 0 1rem; font-size: .8rem; color: #425866; text-transform: uppercase; letter-spacing: .05em; }}
     h3 span {{ font-weight: 400; margin-left: .5rem; }}
     .chunk-text {{ font-family: inherit; font-size: 1rem; line-height: 1.85; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; unicode-bidi: plaintext; text-align: start; }}
+    .match-group + .match-group {{ border-top: 1px solid #d7e0e4; }}
+    .match-heading {{ margin: 0; padding: .8rem 1.25rem; background: #f4f7f8; text-transform: none; letter-spacing: 0; }}
+    .unchecked .match-heading {{ background: #faf4e5; }}
+    .match-reason {{ margin: 0; padding: .6rem 1.25rem 0; color: #425866; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }}
+    .original-chunk {{ margin: 0; border-top: 1px solid #d7e0e4; }}
+    .original-chunk summary {{ padding: .8rem 1.25rem; color: #425866; }}
     footer {{ color: #425866; font-size: .85rem; line-height: 1.6; }}
     @media (max-width: 44rem) {{
       body {{ padding: 1.25rem .75rem 2rem; }}
@@ -202,9 +303,7 @@ def write_review_report(bundle: ReviewBundle, path: Path) -> None:
     <p class="eyebrow">Tinbox · Review only</p>
     <h1>Translation review</h1>
     <p class="filename" dir="auto">{escape(bundle.source_name)}</p>
-    <p class="notice"><strong>{len(bundle.pairs)} paired chunks.</strong> Read each source chunk beside its translation.
-      These are the chunks used during translation, not aligned sentences.
-      No automated quality assessment has been performed.</p>
+    <p class="notice">{notice}</p>
     <details>
       <summary>Translation details</summary>
       <dl>{metadata}</dl>
