@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FileType(StrEnum):
@@ -27,6 +27,13 @@ class ModelType(StrEnum):
     GEMINI = "gemini"  # Google's Gemini models
 
 
+class TranslationProtocol(StrEnum):
+    """Protocol used to request a translation from the model server."""
+
+    CHAT = "chat"
+    TRANSLATEGEMMA = "translategemma"
+
+
 class TranslationConfig(BaseModel):
     """Configuration for translation tasks."""
 
@@ -40,6 +47,8 @@ class TranslationConfig(BaseModel):
     algorithm: Literal["page", "sliding-window", "context-aware"]
     input_file: Path
     output_file: Path | None = None
+    translation_protocol: TranslationProtocol = TranslationProtocol.CHAT
+    local_model: bool = False
 
     # UI and progress settings
     verbose: bool = Field(
@@ -111,6 +120,29 @@ class TranslationConfig(BaseModel):
         default="minimal",
         description="Model reasoning effort level. Higher levels improve quality but increase cost and time significantly.",
     )
+
+    @model_validator(mode="after")
+    def validate_translation_protocol(self) -> Self:
+        if self.translation_protocol == TranslationProtocol.TRANSLATEGEMMA:
+            if self.model != ModelType.OPENAI:
+                raise ValueError(
+                    "TranslateGemma requires an openai: model and OPENAI_BASE_URL"
+                )
+            if self.source_lang == "auto":
+                raise ValueError(
+                    "TranslateGemma requires an explicit source language (--from)"
+                )
+            if self.algorithm != "page" or self.input_file.suffix.lower() != ".txt":
+                raise ValueError(
+                    "TranslateGemma currently supports .txt files with --algorithm page only"
+                )
+            if self.use_glossary or self.reasoning_effort != "minimal":
+                raise ValueError(
+                    "TranslateGemma does not support glossary or reasoning options"
+                )
+            if self.custom_split_token:
+                raise ValueError("TranslateGemma does not support --split-token")
+        return self
 
     model_config = ConfigDict(
         frozen=True,  # Make config immutable

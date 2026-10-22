@@ -6,7 +6,7 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from tinbox.core.types import Glossary, GlossaryEntry, ModelType
+from tinbox.core.types import Glossary, GlossaryEntry, ModelType, TranslationProtocol
 
 
 class TranslationError(Exception):
@@ -24,6 +24,8 @@ class TranslationRequest(BaseModel):
     context: str | None = None  # Supporting context information for better translation
     content_type: str = Field(pattern=r"^(text|image)/.+$")
     model: ModelType
+    translation_protocol: TranslationProtocol = TranslationProtocol.CHAT
+    local_model: bool = False
     model_params: dict = Field(
         default_factory=dict
     )  # Additional model-specific parameters

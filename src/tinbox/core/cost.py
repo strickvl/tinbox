@@ -37,8 +37,13 @@ MODEL_COSTS: dict[ModelType, tuple[float, float]] = {
 }
 
 
+def is_local_model(model: ModelType, *, local: bool = False) -> bool:
+    """Return whether local pricing is selected explicitly or through Ollama."""
+    return model == ModelType.OLLAMA or local
+
+
 def calculate_usage_cost(
-    model: ModelType, input_tokens: int, output_tokens: int
+    model: ModelType, input_tokens: int, output_tokens: int, *, local: bool = False
 ) -> float:
     """Calculate actual cost from token usage using MODEL_COSTS.
 
@@ -46,10 +51,13 @@ def calculate_usage_cost(
         model: Model provider type
         input_tokens: Number of input/prompt tokens used
         output_tokens: Number of output/completion tokens used
+        local: Whether the model runs locally without API charges
 
     Returns:
         Cost in USD
     """
+    if is_local_model(model, local=local):
+        return 0.0
     input_cost_per_1k, output_cost_per_1k = MODEL_COSTS.get(model, (0.0, 0.0))
     return (input_tokens / 1000) * input_cost_per_1k + (
         output_tokens / 1000
@@ -125,6 +133,8 @@ class CostEstimate:
         estimated_cost: float,
         estimated_time: float,
         warnings: list[str],
+        *,
+        requires_confirmation: bool = True,
     ) -> None:
         """Initialize cost estimate.
 
@@ -138,6 +148,7 @@ class CostEstimate:
         self.estimated_cost = estimated_cost
         self.estimated_time = estimated_time
         self.warnings = warnings
+        self.requires_confirmation = requires_confirmation
         self.cost_level = get_cost_level(estimated_cost)
 
 
@@ -169,6 +180,7 @@ def estimate_cost(
     max_cost: float | None = None,
     use_glossary: bool = False,
     reasoning_effort: str = "minimal",
+    local: bool = False,
 ) -> CostEstimate:
     """Estimate the cost of translating a document.
 
@@ -179,12 +191,13 @@ def estimate_cost(
         max_cost: Optional maximum cost threshold
         use_glossary: Whether glossary is enabled
         reasoning_effort: Model reasoning effort level
+        local: Whether the model runs locally without API charges
 
     Returns:
         CostEstimate object with token count, cost, and warnings
     """
     estimated_tokens = estimate_document_tokens(file_path)
-    input_cost_per_1k, output_cost_per_1k = MODEL_COSTS.get(model, (0.0, 0.0))
+    local_model = is_local_model(model, local=local)
 
     # Calculate input tokens based on algorithm
     if algorithm == "context-aware":
@@ -207,33 +220,34 @@ def estimate_cost(
         )
         input_tokens += glossary_overhead_tokens
 
-    input_cost = (input_tokens / 1000) * input_cost_per_1k
-    output_cost = (output_tokens / 1000) * output_cost_per_1k
-    estimated_cost = input_cost + output_cost
+    estimated_cost = calculate_usage_cost(
+        model, input_tokens, output_tokens, local=local
+    )
 
     estimated_total_tokens = input_tokens + output_tokens
 
     # Estimate time (very rough estimate)
     # Assume 30 tokens/second for cloud models, 20 tokens/second for local
-    tokens_per_second = 20 if model == ModelType.OLLAMA else 30
+    tokens_per_second = 20 if local_model else 30
     estimated_time = output_tokens / tokens_per_second
 
     warnings = []
 
-    # Generate warnings
-    if model != ModelType.OLLAMA:
+    if algorithm == "context-aware" and estimated_tokens:
+        context_overhead = input_tokens - estimated_tokens
+        warnings.append(
+            f"Context-aware algorithm uses additional input tokens for context "
+            f"(approximately +{context_overhead:,} tokens, "
+            f"~{context_overhead * 100 // estimated_tokens}% overhead). "
+            "Additional input tokens may increase runtime; these estimates are approximate."
+        )
+
+    # Price warnings apply only to cloud providers.
+    if not local_model:
         if estimated_total_tokens > 50000:  # More than 50K tokens
             warnings.append(
                 f"Large document detected ({estimated_total_tokens:,} tokens). "
                 "Consider using Ollama for no cost."
-            )
-
-        if algorithm == "context-aware":
-            context_overhead = input_tokens - estimated_tokens
-            warnings.append(
-                f"Context-aware algorithm uses additional input tokens for context "
-                f"(+{context_overhead:,} tokens, ~{context_overhead * 100 // estimated_tokens}% overhead). "
-                f"This improves translation quality but increases cost."
             )
 
         if use_glossary:
@@ -247,16 +261,22 @@ def estimate_cost(
                 f"threshold (${max_cost:.2f})"
             )
 
-    # Reasoning effort warning applies to all models (even free ones like Ollama)
     if reasoning_effort != "minimal":
-        warnings.append(
-            f"Reasoning effort is '{reasoning_effort}', which means cost and time estimations are unreliable and will be much higher. "
-            f"Make sure to set a --max-cost and keep an eye on the live cost and time predictions in the progress bar."
-        )
+        if local_model:
+            warnings.append(
+                f"Reasoning effort is '{reasoning_effort}', so token and time "
+                "estimates are approximate and may be higher."
+            )
+        else:
+            warnings.append(
+                f"Reasoning effort is '{reasoning_effort}', which means cost and time estimations are unreliable and will be much higher. "
+                f"Make sure to set a --max-cost and keep an eye on the live cost and time predictions in the progress bar."
+            )
 
     return CostEstimate(
         estimated_tokens=estimated_total_tokens,
         estimated_cost=estimated_cost,
         estimated_time=estimated_time,
         warnings=warnings,
+        requires_confirmation=not local_model or reasoning_effort != "minimal",
     )
