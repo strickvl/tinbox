@@ -1,5 +1,7 @@
 # Translation review
 
+[README](../README.md) · [CLI reference](cli.md#review-commands) · [Workflows](workflows.md#review-a-text-translation)
+
 Tinbox can preserve each source chunk beside the translation returned for that chunk. The `review` command turns this saved JSON bundle into a standalone HTML report for human inspection. An optional matching file selects smaller sentence groups to compare while keeping ambiguous regions unchecked.
 
 Review is opt-in. It does not change the translated text or make corrections. A separate, optional TypeSafe command checks matched groups for changes to participant roles, certainty, and quantifiers. Saved annotations can appear in the report, but they do not certify translation quality.

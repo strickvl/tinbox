@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -48,6 +49,12 @@ logger = get_logger(__name__)
 
 _GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 _OLLAMA_BASE_URL = "http://localhost:11434/v1"
+_GPT6_MINIMAL_EFFORT = {
+    "gpt-6.1-sol": "low",
+    "gpt-6-astra": "low",
+    "gpt-6-sol": "none",
+    "gpt-6-luna": "none",
+}
 
 
 def _check_openai_installed() -> type[OpenAIClient]:
@@ -69,7 +76,7 @@ class OpenAITranslator(ModelInterface):
     def __init__(
         self,
         temperature: float = 0.3,
-        max_tokens: int | None = None,
+        max_tokens: int = 16384,
     ) -> None:
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -147,9 +154,7 @@ class OpenAITranslator(ModelInterface):
                     model=get_model_name(request),
                     prompt=prompt,
                     temperature=self.temperature,
-                    max_tokens=min(self.max_tokens, 2048)
-                    if self.max_tokens is not None
-                    else 2048,
+                    max_tokens=min(self.max_tokens, 2048),
                     stop=["<end_of_turn>", "<eos>"],
                 )
             except Exception as e:
@@ -161,9 +166,8 @@ class OpenAITranslator(ModelInterface):
             "model": get_model_name(request),
             "messages": self._build_messages(request, clean_content),
             "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
         }
-        if self.max_tokens is not None:
-            kwargs["max_tokens"] = self.max_tokens
 
         if request.glossary:
             kwargs["response_format"] = TranslationWithGlossaryResponse
@@ -176,6 +180,19 @@ class OpenAITranslator(ModelInterface):
         for k, v in request.model_params.items():
             if k != "model_name" and k not in kwargs:
                 kwargs[k] = v
+
+        model_family = re.sub(r"-\d{4}-\d{2}-\d{2}$", "", kwargs["model"])
+        if request.model == ModelType.OPENAI and model_family in _GPT6_MINIMAL_EFFORT:
+            kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+            effort = (
+                _GPT6_MINIMAL_EFFORT[model_family]
+                if request.reasoning_effort == "minimal"
+                else request.reasoning_effort
+            )
+            kwargs["reasoning_effort"] = effort
+            if effort != "none":
+                for parameter in ("temperature", "top_p", "top_logprobs", "logprobs"):
+                    kwargs.pop(parameter, None)
 
         try:
             return await client.chat.completions.parse(**kwargs)

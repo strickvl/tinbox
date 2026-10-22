@@ -42,7 +42,7 @@ Sentence matching and report generation are separate offline steps. They do not 
 
 - `2026-10-22-elara-cli-01` stopped during a local CLI import while concurrent sentence-matching implementation was incomplete. No provider call started.
 - `2026-10-22-elara-cli-02` reached OpenAI and received HTTP 400 because Tinbox explicitly requested 100,000 completion tokens but the selected model allows at most 32,768. No translation completed; Arabic was not attempted.
-- `2026-10-22-elara-cli-03` completed both languages with the same CLI arguments after a small provider fix omitted the default `max_tokens` value. The model server now supplies its own output limit. The manifest records the changed code fingerprints.
+- `2026-10-22-elara-cli-03` completed both languages with the same CLI arguments after a small provider fix omitted the default `max_tokens` value. In that recorded code snapshot, the model server supplied its own output limit. The manifest records the changed code fingerprints.
 
 These failed attempts are retained as evidence. They are not benchmark cases or translation-quality failures.
 
@@ -105,9 +105,9 @@ These commands require no provider credentials and make no model requests. The [
 
 Both reports were produced through the real CLI with provider credentials removed from the subprocess environment. All 76 German and 70 Arabic HTML text blocks, including the original chunk pairs, were parsed and compared with their exact saved substrings. Every character is covered once in order. Original source, translation and bundle fingerprints still match the live-run manifest. The evidence is saved in [report-verification.json](runs/2026-10-22-elara-cli-03/report-verification.json).
 
-The full repository suite passed with 570 tests, together with Ruff lint, Ruff formatting and ty. Tests exercise grouped sentences, one-sided unchecked text, stale matching files and complete coverage. These tests establish structural behavior; they do not measure semantic matching accuracy. Browser layout was not visually verified in this run.
+At the translation and sentence-matching stage, the full repository suite passed with 570 tests, together with Ruff lint, Ruff formatting and ty. Tests exercise grouped sentences, one-sided unchecked text, stale matching files and complete coverage. These tests establish structural behavior; they do not measure semantic matching accuracy. Browser layout was not visually verified in this run.
 
-The pilot also exposed and verified a provider fix: ordinary OpenAI-compatible requests now omit an unspecified output-token limit instead of always requesting 100,000 tokens. Explicit limits still work, and TranslateGemma keeps its 2,048-token default.
+The pilot exposed the excessive 100,000-token default and verified a fix that omitted an unspecified output-token limit. The current code incorporates main's later provider changes instead: chat requests use a 16,384-token default and model-appropriate parameter mapping, while TranslateGemma retains its 2,048-token limit. The saved translations, timings, and fingerprints above belong to the earlier omission-based snapshot; these live translations have not been rerun with the current provider behavior.
 
 Before interpreting annotation results, a bilingual reviewer should inspect these groups and add examples with genuinely ambiguous correspondence.
 
@@ -150,4 +150,4 @@ tinbox review "$pilot_run/ar.review.json" --matches "$pilot_run/ar.matches.json"
   --annotations "$pilot_run/ar.annotations.json" --output /tmp/elara-ar-annotated.html
 ```
 
-The annotation implementation passed the full 678-test suite, Ruff lint and formatting, and ty. An independent review found no actionable issues, and an import check succeeded with optional provider SDKs and `httpx` unavailable. Browser layout was not visually checked in this run; text preservation and outcome labels were checked programmatically.
+Before integrating main's later provider and documentation changes, the annotation implementation passed the full 678-test suite, Ruff lint and formatting, and ty. An independent review found no actionable issues, and an import check succeeded with optional provider SDKs and `httpx` unavailable. Browser layout was not visually checked in this run; text preservation and outcome labels were checked programmatically. These are historical checks for the recorded implementation, not a claim that the saved live pilot was rerun after integration.
