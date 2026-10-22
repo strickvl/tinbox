@@ -46,6 +46,13 @@ _THINKING_BUDGETS: dict[str, int] = {
     "high": 8192,
 }
 
+_ADAPTIVE_MODELS = {
+    "claude-sonnet-5-5",
+    "claude-opus-5-5",
+    "claude-haiku-5-5",
+    "claude-fable-5-1",
+}
+
 
 def _check_anthropic_installed() -> type[AnthropicClient]:
     """Raise a clear error if the anthropic package is not installed."""
@@ -95,7 +102,7 @@ class AnthropicTranslator(ModelInterface):
     def __init__(
         self,
         temperature: float = 0.3,
-        max_tokens: int = 100000,
+        max_tokens: int = 16384,
     ) -> None:
         self.temperature = temperature
         self.max_tokens = max_tokens
@@ -176,9 +183,10 @@ class AnthropicTranslator(ModelInterface):
     ):
         """Make a messages API request with retry on rate limits."""
         client = self._get_client()
+        model_name = get_model_name(request)
 
         kwargs: dict = {
-            "model": get_model_name(request),
+            "model": model_name,
             "system": build_system_instruction(request),
             "messages": [
                 {
@@ -189,12 +197,20 @@ class AnthropicTranslator(ModelInterface):
             "max_tokens": self.max_tokens,
         }
 
-        thinking = _thinking_config(request.reasoning_effort)
-        if thinking:
-            kwargs["thinking"] = thinking
-            # Anthropic requires temperature=1 when thinking is enabled, so we omit it
+        if model_name in _ADAPTIVE_MODELS:
+            kwargs["thinking"] = {"type": "adaptive"}
+            kwargs["output_config"] = {
+                "effort": "low"
+                if request.reasoning_effort == "minimal"
+                else request.reasoning_effort
+            }
         else:
-            kwargs["temperature"] = self.temperature
+            thinking = _thinking_config(request.reasoning_effort)
+            if thinking:
+                kwargs["thinking"] = thinking
+                # Extended thinking requires the default temperature of 1.
+            else:
+                kwargs["temperature"] = self.temperature
 
         try:
             return await client.messages.create(**kwargs)

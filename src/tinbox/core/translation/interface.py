@@ -35,7 +35,7 @@ class TranslationRequest(BaseModel):
     )
     reasoning_effort: Literal["minimal", "low", "medium", "high"] = Field(
         default="minimal",
-        description="Model reasoning effort level. Higher levels improve quality but increase cost and time significantly.",
+        description="Model reasoning effort level. Provider mapping varies; higher effort may increase time and cost.",
     )
 
     model_config = ConfigDict(frozen=True, protected_namespaces=())

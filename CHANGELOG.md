@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Rewrite the README and add provider setup, translation workflows, CLI reference, and contributing guides with current model examples.
+- Use supported reasoning settings and request parameters for GPT-6 and current Claude models. Reduce the default chat output budget to 16,384 tokens, including for Gemini and other compatible endpoints.
+- Require Anthropic SDK 0.88.0 or newer for current Claude request parameters.
+
 ## 0.2.0 (2026-10-22)
 
 - Fix structured translation requests to use the OpenAI SDK's `chat.completions.parse()` method, with regression coverage through the actual SDK (#14).
