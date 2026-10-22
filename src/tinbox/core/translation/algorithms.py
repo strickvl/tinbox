@@ -381,10 +381,13 @@ async def translate_sliding_window(
     """
     logger.info("Starting sliding window translation")
 
-    if isinstance(content.pages[0], bytes):
-        raise TranslationError(
-            "Sliding window algorithm not supported for image content"
-        )
+    text_pages: list[str] = []
+    for page in content.pages:
+        if not isinstance(page, str):
+            raise TranslationError(
+                "Sliding window algorithm not supported for image content"
+            )
+        text_pages.append(page)
 
     start_time = datetime.now()
     total_tokens = 0
@@ -392,7 +395,7 @@ async def translate_sliding_window(
 
     try:
         # Join all pages into single text
-        text = "\n\n".join(content.pages)
+        text = "\n\n".join(text_pages)
         logger.debug(f"Combined text: {text}")
 
         # Use configured window size and overlap size, with fallbacks
@@ -784,10 +787,13 @@ async def translate_context_aware(
     Raises:
         TranslationError: If translation fails
     """
-    if isinstance(content.pages[0], bytes):
-        raise TranslationError(
-            "Context-aware algorithm not supported for image content"
-        )
+    text_pages: list[str] = []
+    for page in content.pages:
+        if not isinstance(page, str):
+            raise TranslationError(
+                "Context-aware algorithm not supported for image content"
+            )
+        text_pages.append(page)
 
     start_time = datetime.now()
     total_tokens = 0
@@ -796,7 +802,7 @@ async def translate_context_aware(
 
     try:
         # Join all pages into single text
-        text = "\n\n".join(content.pages)
+        text = "\n\n".join(text_pages)
         logger.info(f"Combined text length: {len(text)} characters")
 
         # Use configured context size with fallback

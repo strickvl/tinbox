@@ -7,6 +7,7 @@ from pathlib import Path
 from zipfile import BadZipFile
 
 from docx import Document
+from docx.document import Document as DocxDocument
 from docx.opc.exceptions import PackageNotFoundError
 
 from tinbox.core.processor import (
@@ -44,7 +45,7 @@ def detect_rtl(text: str) -> bool:
     )
 
 
-def _extract_text(doc: Document) -> str:
+def _extract_text(doc: DocxDocument) -> str:
     """Extract all text from a Word document.
 
     Args:
@@ -98,7 +99,7 @@ class WordProcessor(BaseDocumentProcessor):
         await self.validate_file(file_path)
 
         try:
-            doc = Document(file_path)
+            doc = Document(str(file_path))
             core_props = doc.core_properties
 
             # Extract text and check for RTL content
@@ -158,7 +159,7 @@ class WordProcessor(BaseDocumentProcessor):
 
         try:
             # Load document and extract text
-            doc = Document(file_path)
+            doc = Document(str(file_path))
             text = _extract_text(doc)
             yield text
 

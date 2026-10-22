@@ -18,27 +18,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install uv and select Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v10.3.2
         with:
+          version: "0.13.4"
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      - name: Install Poppler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          pdfinfo -v
+          pdftoppm -v
 
-      - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
-
-      - name: Run ruff linting
-        run: ruff check src tests
-
-      - name: Run ruff formatting check
-        run: ruff format --check src tests
+      - name: Install locked dependencies
+        run: uv sync --locked --all-extras
 
       - name: Run tests
-        run: pytest --cov=tinbox --cov-report=xml -v
+        run: uv run --locked --all-extras pytest --cov=tinbox --cov-report=xml -v
         env:
-          # Disable API calls in tests
+          # Provider tests use mocked clients and do not need API credentials.
           OPENAI_API_KEY: ""
           ANTHROPIC_API_KEY: ""
           GOOGLE_API_KEY: ""
@@ -55,19 +55,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv and select Python
+        uses: astral-sh/setup-uv@v10.3.2
         with:
+          version: "0.13.4"
           python-version: "3.12"
+          enable-cache: true
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Install ruff
-        run: uv pip install --system ruff
+      - name: Install locked dependencies
+        run: uv sync --locked --all-extras
 
       - name: Run ruff
-        run: ruff check src tests
+        run: uv run --locked --all-extras ruff check src tests
 
       - name: Check formatting
-        run: ruff format --check src tests
+        run: uv run --locked --all-extras ruff format --check src tests
+
+      - name: Check types
+        run: uv run --locked --all-extras ty check

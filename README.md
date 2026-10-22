@@ -345,28 +345,43 @@ Missing optional dependencies are shown with installation hints and do not cause
 ### Contributing Setup
 
 ```bash
-# Clone and setup development environment
+# Install uv first: https://docs.astral.sh/uv/getting-started/installation/
+# Clone and set up the development environment
 git clone <repository-url>
 cd tinbox
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --locked --all-extras
 ```
+
+This installs the project, all provider/document extras, and development tools into `.venv` using `uv.lock`. Development uses the Python version in `.python-version`. Install Poppler using the [system requirements](#system-requirements) above before running PDF tests.
+
+Use `uv add` for runtime dependencies and `uv add --dev` for development tools, and include the resulting `uv.lock` changes with `pyproject.toml`.
+
+Dependabot checks Python packages and GitHub Actions every Monday at 09:00 Europe/Amsterdam. Routine updates wait until releases are at least seven days old, with minor and patch updates grouped per ecosystem and major updates proposed separately. Security updates bypass the cooldown.
+
+### Code Quality
+
+```bash
+uv run --locked --all-extras ruff check src tests
+uv run --locked --all-extras ruff format --check src tests
+uv run --locked --all-extras ty check
+```
+
+Use `ruff check --fix` and `ruff format` through the same `uv run` command to fix lint and formatting issues. CI runs these checks once, treats ty warnings as failures, and tests Python 3.12 and 3.13 with Poppler installed.
 
 ### Testing
 
 ```bash
 # Run all tests
-pytest
+uv run --locked --all-extras pytest
 
 # Run specific test categories
-pytest tests/test_core/test_cost.py -v          # Cost estimation
-pytest tests/test_core/test_processors/ -v     # Document processing
-pytest tests/test_core/test_translation/ -v    # Translation algorithms
-pytest tests/test_cli.py -v                    # CLI interface
+uv run --locked --all-extras pytest tests/test_core/test_cost.py -v          # Cost estimation
+uv run --locked --all-extras pytest tests/test_core/test_processors/ -v     # Document processing
+uv run --locked --all-extras pytest tests/test_core/test_translation/ -v    # Translation algorithms
+uv run --locked --all-extras pytest tests/test_cli.py -v                    # CLI interface
 
 # Coverage report
-pytest --cov=tinbox --cov-report=html
+uv run --locked --all-extras pytest --cov-report=html
 ```
 
 ### Project Structure

@@ -344,6 +344,8 @@ class TestBuildTranslationContextInfo:
             next_chunk="Next text",
         )
 
+        assert context is not None
+
         # Check all tag counts
         assert context.count("[PREVIOUS_CHUNK]") == 1
         assert context.count("[/PREVIOUS_CHUNK]") == 1

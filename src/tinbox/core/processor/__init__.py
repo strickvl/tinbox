@@ -73,7 +73,7 @@ class DocumentProcessor(Protocol):
         """
         ...
 
-    async def extract_content(
+    def extract_content(
         self, file_path: Path, *, start_page: int = 1, end_page: int | None = None
     ) -> AsyncIterator[str | bytes]:
         """Extract content from a document.

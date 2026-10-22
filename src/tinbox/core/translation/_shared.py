@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import json
+from collections.abc import Callable
 from typing import Any
 
 from PIL import Image
@@ -66,7 +67,7 @@ def build_retry_decorator(
     """
     if rate_limit_error_cls is None:
 
-        def noop(fn):  # type: ignore[no-untyped-def]
+        def noop[T: Callable](fn: T) -> T:
             return fn
 
         return noop
@@ -201,7 +202,7 @@ def build_image_user_content(request: TranslationRequest, image_b64: str) -> lis
 
 def prepare_request(
     request: TranslationRequest,
-) -> tuple[str, str, str] | None:
+) -> tuple[str, str | bytes, str] | None:
     """Validate and prepare a translation request.
 
     Validates language pair, checks for empty content, and extracts whitespace.
@@ -210,7 +211,7 @@ def prepare_request(
         request: The translation request
 
     Returns:
-        Tuple of (prefix, clean_content, suffix) for text requests,
+        Tuple of (prefix, clean_content, suffix), preserving image bytes,
         or None if the content is empty (caller should return early).
 
     Raises:
@@ -227,6 +228,9 @@ def prepare_request(
         logger.info("Empty content, returning as-is")
         return None
 
+    if isinstance(request.content, bytes):
+        return "", request.content, ""
+
     prefix, clean, suffix = extract_whitespace_formatting(request.content)
     logger.debug("Content prefix: ", prefix=prefix)
     logger.debug("Content suffix: ", suffix=suffix)
@@ -234,7 +238,7 @@ def prepare_request(
     return prefix, clean, suffix
 
 
-def validate_image_content(content: bytes) -> None:
+def validate_image_content(content: str | bytes) -> None:
     """Validate that image bytes are a valid image.
 
     Args:
@@ -243,6 +247,8 @@ def validate_image_content(content: bytes) -> None:
     Raises:
         TranslationError: If the image data is invalid
     """
+    if not isinstance(content, bytes):
+        raise TranslationError("Translation failed: Invalid image data")
     try:
         Image.open(io.BytesIO(content))
     except Exception as e:

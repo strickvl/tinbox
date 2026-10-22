@@ -280,7 +280,7 @@ def translate(
             raise typer.Exit(1)
 
         # Validate reasoning effort parameter
-        valid_reasoning_efforts = ["minimal", "low", "medium", "high"]
+        valid_reasoning_efforts = ("minimal", "low", "medium", "high")
         if reasoning_effort not in valid_reasoning_efforts:
             raise ValueError(
                 f"Invalid reasoning effort '{reasoning_effort}'. "
@@ -312,6 +312,9 @@ def translate(
                     f"Please use: tinbox translate {input_file} --algorithm page --model {model}"
                 )
                 raise typer.Exit(1)
+
+        if effective_algorithm not in ("page", "sliding-window", "context-aware"):
+            raise ValueError(f"Invalid translation algorithm '{effective_algorithm}'")
 
         # Create translation config (use normalized language codes)
         config = TranslationConfig(

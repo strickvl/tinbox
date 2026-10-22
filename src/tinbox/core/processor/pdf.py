@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pypdf
+from pypdf.errors import PdfReadError
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
@@ -93,7 +94,7 @@ class PdfProcessor(BaseDocumentProcessor):
         try:
             with open(file_path, "rb") as f:
                 pdf = pypdf.PdfReader(f)
-                info = pdf.metadata
+                info = pdf.metadata or {}
 
                 # Use filename as title if no title in PDF metadata
                 title = info.get("/Title")
@@ -109,7 +110,7 @@ class PdfProcessor(BaseDocumentProcessor):
                     modification_date=info.get("/ModDate", None),
                     custom_metadata={"pdf_info": dict(info) if info else {}},
                 )
-        except pypdf.errors.PdfReadError as e:
+        except PdfReadError as e:
             raise ProcessingError("File format not supported") from e
         except Exception as e:
             logger.exception("Failed to extract PDF metadata")

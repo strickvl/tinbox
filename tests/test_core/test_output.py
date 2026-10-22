@@ -152,10 +152,11 @@ def test_markdown_output_with_errors(tmp_path):
     assert "Network latency detected" in content
 
 
-def test_unsupported_format():
+@pytest.mark.parametrize("unsupported_format", ["invalid"])
+def test_unsupported_format(unsupported_format):
     """Test handling of unsupported output format."""
     with pytest.raises(ValueError, match="Unsupported output format"):
-        create_handler("invalid")  # Invalid format
+        create_handler(unsupported_format)
 
 
 def test_output_with_missing_data(tmp_path):

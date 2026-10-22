@@ -105,6 +105,7 @@ class TestBuildTranslationContextInfo:
             "Use this context to maintain consistency in terminology and style.",
         ]
 
+        assert context is not None
         for part in expected_parts:
             assert part in context
 
@@ -174,6 +175,8 @@ class TestBuildTranslationContextInfo:
             previous_chunk="Sample text",
             previous_translation="Texto de muestra",
         )
+
+        assert context is not None
 
         # Check tag structure
         assert context.count("[PREVIOUS_CHUNK]") == 1
@@ -303,7 +306,11 @@ class TestBackwardCompatibility:
         assert request.context is None
         assert request.content == "Hello, world!"
 
-    def test_request_immutability(self):
+    @pytest.mark.parametrize(
+        ("attribute", "value"),
+        [("content", "Modified content"), ("context", "Modified context")],
+    )
+    def test_request_immutability(self, attribute: str, value: str):
         """Test that TranslationRequest remains immutable."""
         request = TranslationRequest(
             source_lang="en",
@@ -317,7 +324,4 @@ class TestBackwardCompatibility:
 
         # Should not be able to modify the request
         with pytest.raises(Exception):  # ValidationError or AttributeError
-            request.content = "Modified content"
-
-        with pytest.raises(Exception):  # ValidationError or AttributeError
-            request.context = "Modified context"
+            setattr(request, attribute, value)

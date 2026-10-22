@@ -9,6 +9,10 @@ from __future__ import annotations
 import base64
 import os
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from openai import AsyncOpenAI as OpenAIClient
 
 from tinbox.core.cost import calculate_usage_cost
 from tinbox.core.translation._shared import (
@@ -37,8 +41,8 @@ from tinbox.utils.logging import get_logger
 try:
     from openai import AsyncOpenAI, RateLimitError
 except ImportError:
-    AsyncOpenAI = None  # type: ignore[assignment, misc]
-    RateLimitError = None  # type: ignore[assignment, misc]
+    AsyncOpenAI = None
+    RateLimitError = None
 
 logger = get_logger(__name__)
 
@@ -46,13 +50,14 @@ _GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 _OLLAMA_BASE_URL = "http://localhost:11434/v1"
 
 
-def _check_openai_installed() -> None:
+def _check_openai_installed() -> type[OpenAIClient]:
     """Raise a clear error if the openai package is not installed."""
     if AsyncOpenAI is None:
         raise TranslationError(
             "OpenAI-compatible support is not installed. "
             "Install with: pip install tinbox[openai] or pip install tinbox[all]"
         )
+    return AsyncOpenAI
 
 
 completion_with_retry = build_retry_decorator(RateLimitError, logger)
@@ -68,26 +73,26 @@ class OpenAITranslator(ModelInterface):
     ) -> None:
         self.temperature = temperature
         self.max_tokens = max_tokens
-        self._clients: dict[ModelType, AsyncOpenAI] = {}  # type: ignore[type-arg]
+        self._clients: dict[ModelType, OpenAIClient] = {}
 
-    def _get_client(self, model: ModelType) -> AsyncOpenAI:  # type: ignore[return]
+    def _get_client(self, model: ModelType) -> OpenAIClient:
         """Get or create an AsyncOpenAI client for the given provider."""
-        _check_openai_installed()
+        client_class = _check_openai_installed()
 
         if model not in self._clients:
             if model == ModelType.OLLAMA:
-                self._clients[model] = AsyncOpenAI(
+                self._clients[model] = client_class(
                     base_url=_OLLAMA_BASE_URL,
                     api_key="ollama",
                 )
             elif model == ModelType.GEMINI:
                 api_key = os.environ.get("GOOGLE_API_KEY", "")
-                self._clients[model] = AsyncOpenAI(
+                self._clients[model] = client_class(
                     base_url=_GEMINI_BASE_URL,
                     api_key=api_key,
                 )
             else:
-                self._clients[model] = AsyncOpenAI()
+                self._clients[model] = client_class()
 
         return self._clients[model]
 
@@ -100,10 +105,12 @@ class OpenAITranslator(ModelInterface):
         ]
 
         if request.content_type.startswith("text/"):
-            messages.extend(
-                build_user_messages(request, clean_content)  # type: ignore[arg-type]
-            )
+            if not isinstance(clean_content, str):
+                raise TranslationError("Text content must be a string")
+            messages.extend(build_user_messages(request, clean_content))
         else:
+            if not isinstance(clean_content, bytes):
+                raise TranslationError("Translation failed: Invalid image data")
             if request.context:
                 messages.append(
                     {
@@ -115,7 +122,7 @@ class OpenAITranslator(ModelInterface):
             if glossary_text:
                 messages.append({"role": "user", "content": glossary_text})
 
-            image_b64 = base64.b64encode(clean_content).decode()  # type: ignore[arg-type]
+            image_b64 = base64.b64encode(clean_content).decode()
             messages.append(
                 {
                     "role": "user",
@@ -129,7 +136,7 @@ class OpenAITranslator(ModelInterface):
     @completion_with_retry
     async def _make_completion_request(
         self, request: TranslationRequest, clean_content: str | bytes
-    ):  # type: ignore[no-untyped-def]
+    ):
         """Make a chat completion request with retry on rate limits."""
         client = self._get_client(request.model)
 
@@ -160,7 +167,7 @@ class OpenAITranslator(ModelInterface):
         else:
             kwargs["response_format"] = TranslationWithoutGlossaryResponse
 
-        if request.reasoning_effort and request.reasoning_effort != "minimal":
+        if request.reasoning_effort != "minimal":
             kwargs["reasoning_effort"] = request.reasoning_effort
 
         for k, v in request.model_params.items():
@@ -195,7 +202,7 @@ class OpenAITranslator(ModelInterface):
             content_prefix, clean_content, content_suffix = prep
 
             if request.content_type.startswith("image/"):
-                validate_image_content(clean_content)  # type: ignore[arg-type]
+                validate_image_content(clean_content)
 
             response = await self._make_completion_request(request, clean_content)
 
