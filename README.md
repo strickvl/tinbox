@@ -106,17 +106,26 @@ tinbox translate --to de --model ollama:llama3.1:8b ./examples/elara_story.txt
 
 ```bash
 # Recommended: Install with all features (all providers + PDF + DOCX)
-pip install -e ".[all]"
+uv tool install --python 3.13 "tinbox[all]"
 
 # Or install specific providers
-pip install -e ".[openai]"      # OpenAI, Ollama, and Gemini support
-pip install -e ".[anthropic]"   # Anthropic Claude support
+uv tool install --python 3.13 "tinbox[openai]"      # OpenAI, Ollama, and Gemini support
+uv tool install --python 3.13 "tinbox[anthropic]"   # Anthropic Claude support
 
-# Or install specific document features
-pip install -e ".[pdf]"     # PDF support only
-pip install -e ".[docx]"    # Word document support only
-pip install tinbox          # Base package only (no cloud providers)
+# Base package only (no provider SDKs)
+uv tool install --python 3.13 tinbox
 ```
+
+For an existing PyPI installation with the desired extras and Python 3.12+, run `uv tool upgrade tinbox`.
+
+When upgrading from 0.1.0, switching from a GitHub installation, or changing Python versions, reinstall from PyPI with explicit extras:
+
+```bash
+uv tool install --force --python 3.13 "tinbox[all]>=0.2.0"
+tinbox --version
+```
+
+Use `tinbox[openai]` instead of `tinbox[all]` if you only need OpenAI, Ollama, Gemini, or oMLX. Version 0.2.0 requires Python 3.12+ and replaces LiteLLM with optional provider SDKs, so a base-only upgrade does not install those SDKs. For development from a source checkout, use `uv sync --locked --all-extras`.
 
 > **Note:** Ollama and Gemini are accessed via OpenAI-compatible APIs, so they require the `openai` extra.
 > For [OpenRouter](https://openrouter.ai), use `openai:model-name` with `OPENAI_BASE_URL=https://openrouter.ai/api/v1`.
