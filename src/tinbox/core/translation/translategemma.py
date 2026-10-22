@@ -8,7 +8,7 @@ from tinbox.utils.language import LanguageCode, normalize_language_code
 def build_translategemma_prompt(
     request: TranslationRequest, content: str | bytes
 ) -> str:
-    """Render the single-user text form of Google's TranslateGemma template.
+    """Render the text template without BOS, which oMLX tokenization adds.
 
     https://huggingface.co/mlx-community/translategemma-27b-it-4bit/blob/main/chat_template.jinja
     """
@@ -38,7 +38,7 @@ def build_translategemma_prompt(
     source, source_code = language(request.source_lang)
     target, target_code = language(request.target_lang)
     return (
-        f"<bos><start_of_turn>user\nYou are a professional {source} ({source_code}) "
+        f"<start_of_turn>user\nYou are a professional {source} ({source_code}) "
         f"to {target} ({target_code}) translator. Your goal is to accurately convey "
         f"the meaning and nuances of the original {source} text while adhering to "
         f"{target} grammar, vocabulary, and cultural sensitivities.\n"

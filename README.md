@@ -141,7 +141,7 @@ The initial mode supports short `.txt` files, an explicit source language, and t
 
 `--local` declares that the endpoint runs a model without API charges. It applies zero API cost to both estimates and recorded usage, and also works with the default chat protocol. Use it only for a local model, not for a localhost proxy that forwards requests to paid providers. Without this flag, custom OpenAI-compatible endpoints retain Tinbox's approximate OpenAI provider rates. Ollama has zero API charges by default. Token and time estimates are approximate, and context-overhead notices do not indicate a detected translation-quality problem.
 
-The protocol is covered by real-SDK tests over mocked HTTP, including a complete CLI translation. Live oMLX/model inference has not been validated by those tests.
+The protocol is covered by real-SDK tests over mocked HTTP and [live CLI checks](plans/omlx-live-validation.md) against oMLX 0.7.2 with `mlx-community/translategemma-4b-it-4bit`, including German ↔ English translation and text/JSON/Markdown exports. The 27B variant has not been tested live.
 
 ### System Requirements
 

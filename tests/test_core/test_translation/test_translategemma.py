@@ -21,7 +21,7 @@ from tinbox.core.types import (
 )
 
 GERMAN_TO_ENGLISH_PROMPT = (
-    "<bos><start_of_turn>user\n"
+    "<start_of_turn>user\n"
     "You are a professional German (de) to English (en) translator. Your goal is to "
     "accurately convey the meaning and nuances of the original German text while "
     "adhering to English grammar, vocabulary, and cultural sensitivities.\n"
