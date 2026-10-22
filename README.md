@@ -14,10 +14,10 @@ Tinbox reads PDFs, Word documents, and text files, then writes translations as t
 
 This example translates a short English note into German with [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol). Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and have an OpenAI API key ready. Tinbox requires Python 3.12 or newer.
 
-**Source version:** the modern cloud-model fixes are not in the published 0.2.0 package. From the checkout containing this README, install the current code with:
+Install Tinbox 0.3.0 or newer with OpenAI support:
 
 ```bash
-uv tool install --force --python 3.13 ".[openai]"
+uv tool install --python 3.13 "tinbox[openai]>=0.3.0"
 ```
 
 Set your key, create a sample file, and translate it. These examples use a Bash or Zsh shell and the default OpenAI endpoint; unset `OPENAI_BASE_URL` if you previously configured another server.
