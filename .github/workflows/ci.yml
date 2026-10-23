@@ -35,11 +35,16 @@ jobs:
           pdfinfo -v
           pdftoppm -v
 
+      - name: Install just
+        uses: extractions/setup-just@v4
+        with:
+          just-version: "1.58.0"
+
       - name: Install locked dependencies
         run: uv sync --locked --all-extras
 
       - name: Run tests
-        run: uv run --locked --all-extras pytest --cov=tinbox --cov-report=xml -v
+        run: just test --cov=tinbox --cov-report=xml -v
         env:
           # Provider tests use mocked clients and do not need API credentials.
           OPENAI_API_KEY: ""
@@ -66,14 +71,22 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
+      - name: Install just
+        uses: extractions/setup-just@v4
+        with:
+          just-version: "1.58.0"
+
       - name: Install locked dependencies
         run: uv sync --locked --all-extras
 
       - name: Run ruff
-        run: uv run --locked --all-extras ruff check src tests
+        run: just lint
 
       - name: Check formatting
-        run: uv run --locked --all-extras ruff format --check src tests
+        run: just format-check
 
       - name: Check types
-        run: uv run --locked --all-extras ty check
+        run: just types
+
+      - name: Check file length
+        run: just file-length

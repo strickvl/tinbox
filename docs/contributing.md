@@ -17,21 +17,23 @@ The checkout uses Python 3.12 from `.python-version`. `uv sync` installs all pro
 
 ## Run checks
 
+Install [just](https://just.systems/man/en/packages.html) (for example `brew install just`), then run the checks through the recipes in `justfile`:
+
 ```bash
-uv run --locked --all-extras ruff check src tests
-uv run --locked --all-extras ruff format --check src tests
-uv run --locked --all-extras ty check
-uv run --locked --all-extras pytest
+just check
+just test
 ```
 
-CI runs Ruff and ty, then tests on Python 3.12 and 3.13 with Poppler installed. Type-checker warnings fail the check. Provider tests mock SDK clients and need no live API credentials.
+`just check` runs Ruff linting, the Ruff format check, ty, and a file-length check that fails if any Python file in `src/` or `tests/` is over 1000 lines. Run `just` to list every recipe, and `just format` to format files in place.
+
+CI calls the same recipes. It runs Ruff, ty, and the file-length check, then tests on Python 3.12 and 3.13 with Poppler installed. Type-checker warnings fail the check. Provider tests mock SDK clients and need no live API credentials.
 
 For a focused test run or coverage report:
 
 ```bash
-uv run --locked --all-extras pytest tests/test_cli.py
-uv run --locked --all-extras pytest tests/test_core/test_cost.py -v
-uv run --locked --all-extras pytest --cov-report=html
+just test tests/test_cli.py
+just test tests/test_core/test_cost.py -v
+just test --cov-report=html
 ```
 
 ## Find the code
