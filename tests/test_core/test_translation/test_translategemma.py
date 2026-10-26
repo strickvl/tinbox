@@ -98,7 +98,11 @@ async def test_translategemma_real_sdk(text: str, finish_reason: str):
     "arguments,suffix,message",
     [
         ([], ".txt", "explicit source language"),
-        (["--from", "de", "--algorithm", "context-aware"], ".txt", "--algorithm page"),
+        (
+            ["--from", "de", "--algorithm", "sliding-window"],
+            ".txt",
+            "context-aware or page",
+        ),
         (["--from", "de", "--glossary"], ".txt", "glossary or reasoning"),
         (
             ["--from", "de", "--reasoning-effort", "high"],
@@ -106,7 +110,11 @@ async def test_translategemma_real_sdk(text: str, finish_reason: str):
             "glossary or reasoning",
         ),
         (["--from", "de"], ".pdf", ".txt files"),
-        (["--from", "de", "--split-token", "|||"], ".txt", "--split-token"),
+        (
+            ["--from", "de", "--save-review-input", "review.json"],
+            ".txt",
+            "review pair export",
+        ),
     ],
 )
 def test_translategemma_cli_rejects_unsupported_options(
@@ -184,6 +192,72 @@ def test_translategemma_cli_with_real_sdk(tmp_path: Path, monkeypatch):
     assert "Estimated Cost" not in result.stdout
     assert "Final Cost" not in result.stdout
     assert "potential issues" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "source_text,arguments",
+    [
+        ("Hallo, Welt!\n\nGuten Morgen!\n", ["--context-size", "20"]),
+        ("Hallo, Welt!|||Guten Morgen!\n", ["--split-token", "|||"]),
+    ],
+)
+def test_translategemma_cli_splits_long_files_without_context(
+    tmp_path: Path, monkeypatch, source_text: str, arguments: list[str]
+):
+    source = tmp_path / "source.txt"
+    source.write_text(source_text)
+    output = tmp_path / "translated.txt"
+    translations = {"Hallo, Welt!": "Hello, world!", "Guten Morgen!": "Good morning!"}
+    prompts = []
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        prompt = json.loads(request.content)["prompt"]
+        prompts.append(prompt)
+        chunk = prompt.split(":\n\n\n")[1].removesuffix(
+            "<end_of_turn>\n<start_of_turn>model\n"
+        )
+        return httpx2.Response(200, json=completion_response(translations[chunk]))
+
+    client = AsyncOpenAI(
+        api_key="test-key",
+        base_url="http://test.invalid/v1",
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
+    )
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1")
+    monkeypatch.setattr(
+        "tinbox.core.translation.openai.AsyncOpenAI", lambda **kwargs: client
+    )
+    try:
+        result = CliRunner().invoke(
+            app,
+            [
+                "translate",
+                str(source),
+                "--from",
+                "de",
+                "--to",
+                "en",
+                "--model",
+                "openai:local-alias",
+                "--translation-protocol",
+                "translategemma",
+                "--local",
+                "--output",
+                str(output),
+                *arguments,
+            ],
+        )
+    finally:
+        asyncio.run(client.close())
+    assert result.exit_code == 0, result.stdout
+    assert prompts[0] == GERMAN_TO_ENGLISH_PROMPT
+    assert len(prompts) == 2
+    assert "Hallo" not in prompts[1]
+    expected = "Hello, world!\n\nGood morning!\n"
+    if "--split-token" in arguments:
+        expected = "Hello, world!Good morning!\n"
+    assert output.read_text() == expected
+    assert "Context-aware algorithm uses additional input tokens" not in result.stdout
 
 
 def test_ollama_context_notice_does_not_require_confirmation(

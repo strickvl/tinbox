@@ -140,10 +140,10 @@ This protocol renders TranslateGemma's translation prompt and sends it to `/v1/c
 Keep these constraints in mind before preparing input:
 
 - Supply an explicit source language with `--from`; auto-detection is unsupported.
-- Use `.txt` input and the `page` algorithm, which Tinbox selects automatically for this protocol. Each file becomes one request.
-- Split long files yourself. TranslateGemma has a documented 2K-token input context, but Tinbox does not load its tokenizer or enforce that limit.
+- Use `.txt` input. Tinbox selects the `context-aware` algorithm by default and splits the file into chunks of about `--context-size` characters (default 2,000) at paragraph and sentence breaks, or at `--split-token`. Each chunk becomes one request. Unlike the chat protocol, Tinbox sends no previous or next chunk with it, because TranslateGemma's fixed prompt has no place for that text. Use `--algorithm page` to send the whole file as one request.
+- Keep each chunk within TranslateGemma's documented 2K-token input context. Tinbox counts characters, not tokens, and does not enforce that limit. Lower `--context-size`, for example to 1000, for Chinese, Japanese, or Korean text, where one character can take one token or more.
 - Output is capped at 2,048 tokens. A response that ends because it hits the output limit is reported as a failure.
-- Context-aware and sliding-window algorithms, `--split-token`, glossary use, non-minimal reasoning effort, and image or PDF inputs are rejected.
+- The sliding-window algorithm, glossary use, non-minimal reasoning effort, review pair export, and image or PDF inputs are rejected.
 
 The linked validation notes record short translations with oMLX 0.7.2 and `mlx-community/translategemma-4b-it-4bit`. They do not establish current server availability, long-document quality, or live support for the 27B variant.
 
@@ -177,6 +177,6 @@ If translation fails, check the relevant setup:
 - **Ollama connection error:** confirm that the server is running at `localhost:11434` and that the requested model is available.
 - **PDF error:** confirm that `pdf2image`, `pdfinfo`, and `pdftoppm` are available, and that the model accepts images.
 - **TranslateGemma template or JSON error:** use `--translation-protocol translategemma`, an `openai:` model, `OPENAI_BASE_URL`, and an explicit `--from`.
-- **Incomplete TranslateGemma response:** split the input into shorter files and retry.
+- **Incomplete TranslateGemma response:** lower `--context-size` and retry.
 
 Use `tinbox translate --help` for option details or consult the [CLI reference](cli.md).

@@ -136,16 +136,20 @@ class TranslationConfig(BaseModel):
                 raise ValueError(
                     "TranslateGemma requires an explicit source language (--from)"
                 )
-            if self.algorithm != "page" or self.input_file.suffix.lower() != ".txt":
+            if (
+                self.algorithm not in ("context-aware", "page")
+                or self.input_file.suffix.lower() != ".txt"
+            ):
                 raise ValueError(
-                    "TranslateGemma currently supports .txt files with --algorithm page only"
+                    "TranslateGemma supports .txt files with "
+                    "--algorithm context-aware or page only"
                 )
             if self.use_glossary or self.reasoning_effort != "minimal":
                 raise ValueError(
                     "TranslateGemma does not support glossary or reasoning options"
                 )
-            if self.custom_split_token:
-                raise ValueError("TranslateGemma does not support --split-token")
+            if self.preserve_review_pairs:
+                raise ValueError("TranslateGemma does not support review pair export")
         return self
 
     @model_validator(mode="after")
