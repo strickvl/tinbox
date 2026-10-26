@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 (2026-10-26)
+
+- Split long `.txt` inputs for `--translation-protocol translategemma` at paragraph and sentence breaks, or at `--split-token`, and send each chunk as its own request (#39). TranslateGemma now defaults to `context-aware` splitting instead of one request per file; each chunk is sent without neighbouring text because the model's fixed prompt has no place for it. Use `--algorithm page` for the previous behaviour. Review pair export is rejected for this protocol.
+- Support Anthropic SDK 1.x by sending `temperature` in the request body; a fresh 0.3.0 install resolves to Anthropic 1.x, which removed that argument (#35). Test against OpenAI SDK 3.x (#34).
+- Remove retired model names from model parsing and validation (#37, #38).
+- Add `just` recipes for checks and tests, and fail CI when a Python file in `src/` or `tests/` exceeds 1,000 lines (#32).
+
+### Upgrade
+
+```bash
+uv tool upgrade tinbox
+tinbox --version
+```
+
+When changing extras or Python versions, or replacing a GitHub installation, use `uv tool install --force --python 3.13 "tinbox[all]>=0.4.0"`.
+
 ## 0.3.0 (2026-10-22)
 
 - Preserve source and translation pairs with `translate --save-review-input` for fresh, context-aware `.txt` translations. Generate offline side-by-side HTML reports with `tinbox review`, including right-to-left text support.
