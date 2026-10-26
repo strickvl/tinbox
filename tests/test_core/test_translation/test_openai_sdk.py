@@ -3,7 +3,7 @@
 import json
 from typing import Literal
 
-import httpx
+import httpx2
 import pytest
 from openai import AsyncOpenAI
 
@@ -46,15 +46,15 @@ async def test_translation_through_real_sdk(
     if use_glossary:
         translated["glossary_extension"] = [{"term": "Welt", "translation": "world"}]
 
-    def respond(request: httpx.Request) -> httpx.Response:
+    def respond(request: httpx2.Request) -> httpx2.Response:
         body = json.loads(request.content)
         requests.append(body)
         if body.get("max_tokens", 0) > 32768:
-            return httpx.Response(
+            return httpx2.Response(
                 400,
                 json={"error": {"message": "max_tokens exceeds the model limit"}},
             )
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "id": "chatcmpl-test",
@@ -82,7 +82,7 @@ async def test_translation_through_real_sdk(
     async with AsyncOpenAI(
         api_key="test-key",
         base_url="http://test.invalid/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     ) as client:
         translator = (
             OpenAITranslator()
@@ -136,15 +136,15 @@ async def test_gpt6_request_contract(
 ):
     requests: list[dict] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
+    def respond(request: httpx2.Request) -> httpx2.Response:
         assert request.url.path == "/v1/chat/completions"
         requests.append(json.loads(request.content))
-        return httpx.Response(200, json=chat_response())
+        return httpx2.Response(200, json=chat_response())
 
     async with AsyncOpenAI(
         api_key="test-key",
         base_url="http://test.invalid/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     ) as client:
         translator = (
             OpenAITranslator()
@@ -215,14 +215,14 @@ async def test_standard_and_compatible_chat_request_contract(
 ):
     requests: list[dict] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
+    def respond(request: httpx2.Request) -> httpx2.Response:
         requests.append(json.loads(request.content))
-        return httpx.Response(200, json=chat_response())
+        return httpx2.Response(200, json=chat_response())
 
     async with AsyncOpenAI(
         api_key="test-key",
         base_url="http://test.invalid/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     ) as client:
         translator = (
             OpenAITranslator()
@@ -257,10 +257,10 @@ async def test_translategemma_keeps_completion_token_cap(
 ):
     requests: list[dict] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
+    def respond(request: httpx2.Request) -> httpx2.Response:
         assert request.url.path == "/v1/completions"
         requests.append(json.loads(request.content))
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "id": "cmpl-test",
@@ -276,7 +276,7 @@ async def test_translategemma_keeps_completion_token_cap(
     async with AsyncOpenAI(
         api_key="test-key",
         base_url="http://test.invalid/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     ) as client:
         translator = OpenAITranslator(max_tokens=max_tokens)
         translator._clients[ModelType.OPENAI] = client
