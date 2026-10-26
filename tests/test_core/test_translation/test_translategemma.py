@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from unittest.mock import Mock
 
-import httpx
+import httpx2
 import pytest
 from openai import AsyncOpenAI
 from typer.testing import CliRunner
@@ -52,7 +52,7 @@ def completion_response(
 async def test_translategemma_real_sdk(text: str, finish_reason: str):
     requests = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
+    def respond(request: httpx2.Request) -> httpx2.Response:
         assert request.url.path == "/v1/completions"
         body = json.loads(request.content)
         requests.append(body)
@@ -61,12 +61,12 @@ async def test_translategemma_real_sdk(text: str, finish_reason: str):
         assert "response_format" not in body
         assert "reasoning_effort" not in body
         assert body["max_tokens"] == 2048
-        return httpx.Response(200, json=completion_response(text, finish_reason))
+        return httpx2.Response(200, json=completion_response(text, finish_reason))
 
     async with AsyncOpenAI(
         api_key="test-key",
         base_url="http://test.invalid/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     ) as client:
         translator = OpenAITranslator()
         translator._clients[ModelType.OPENAI] = client
@@ -141,16 +141,16 @@ def test_translategemma_cli_with_real_sdk(tmp_path: Path, monkeypatch):
     output = tmp_path / "translated.txt"
     requests = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
+    def respond(request: httpx2.Request) -> httpx2.Response:
         requests.append(request)
         assert request.url.path == "/v1/completions"
         assert json.loads(request.content)["prompt"] == GERMAN_TO_ENGLISH_PROMPT
-        return httpx.Response(200, json=completion_response())
+        return httpx2.Response(200, json=completion_response())
 
     client = AsyncOpenAI(
         api_key="test-key",
         base_url="http://test.invalid/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     )
     monkeypatch.setenv("OPENAI_BASE_URL", "http://127.0.0.1:8000/v1")
     monkeypatch.setattr(
@@ -193,8 +193,8 @@ def test_ollama_context_notice_does_not_require_confirmation(
     source.write_text("Hallo, Welt!")
     output = tmp_path / "translated.txt"
 
-    def respond(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
             200,
             json={
                 "id": "chatcmpl-test",
@@ -217,7 +217,7 @@ def test_ollama_context_notice_does_not_require_confirmation(
     client = AsyncOpenAI(
         api_key="test-key",
         base_url="http://test.invalid/v1",
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     )
     monkeypatch.setattr(
         "tinbox.core.translation.openai.AsyncOpenAI", lambda **kwargs: client
