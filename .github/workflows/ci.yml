@@ -19,7 +19,7 @@ jobs:
         python-version: ["3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Install uv and select Python ${{ matrix.python-version }}
         uses: astral-sh/setup-uv@v10.3.2
@@ -62,7 +62,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
       - name: Install uv and select Python
         uses: astral-sh/setup-uv@v10.3.2
