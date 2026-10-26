@@ -21,7 +21,7 @@ from tinbox.core.translation.interface import (
     TranslationRequest,
     TranslationResponse,
 )
-from tinbox.core.types import TranslationConfig
+from tinbox.core.types import TranslationConfig, TranslationProtocol
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -865,13 +865,17 @@ async def translate_context_aware(
             # Get the next chunk if available
             next_chunk = chunks[i + 1] if i + 1 < len(chunks) else None
 
-            # Build context information for this chunk
-            context_info = build_translation_context_info(
-                source_lang=config.source_lang,
-                target_lang=config.target_lang,
-                previous_chunk=previous_chunk,
-                previous_translation=previous_translation,
-                next_chunk=next_chunk,
+            # TranslateGemma's fixed prompt has no place for neighbouring chunks
+            context_info = (
+                None
+                if config.translation_protocol == TranslationProtocol.TRANSLATEGEMMA
+                else build_translation_context_info(
+                    source_lang=config.source_lang,
+                    target_lang=config.target_lang,
+                    previous_chunk=previous_chunk,
+                    previous_translation=previous_translation,
+                    next_chunk=next_chunk,
+                )
             )
 
             # Create translation request with separate content and context

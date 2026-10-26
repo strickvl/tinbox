@@ -211,7 +211,7 @@ def translate(
         None,
         "--algorithm",
         "-a",
-        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware'. Defaults to page for PDF/TranslateGemma, context-aware for other text.",
+        help="Translation algorithm: 'page', 'sliding-window', or 'context-aware'. Defaults to page for PDF, context-aware for text.",
     ),
     translation_protocol: TranslationProtocol = typer.Option(
         TranslationProtocol.CHAT,
@@ -319,10 +319,7 @@ def translate(
         if algorithm is None:
             # Auto-select: PDF needs 'page' algorithm, text files use 'context-aware'
             effective_algorithm = (
-                "page"
-                if file_type == FileType.PDF
-                or translation_protocol == TranslationProtocol.TRANSLATEGEMMA
-                else "context-aware"
+                "page" if file_type == FileType.PDF else "context-aware"
             )
         else:
             effective_algorithm = algorithm
@@ -394,7 +391,10 @@ def translate(
         estimate = estimate_cost(
             input_file,
             model_type,
-            algorithm=effective_algorithm,
+            # TranslateGemma chunks carry no neighbouring context to pay for
+            algorithm="page"
+            if translation_protocol == TranslationProtocol.TRANSLATEGEMMA
+            else effective_algorithm,
             max_cost=max_cost,
             use_glossary=use_glossary,
             reasoning_effort=reasoning_effort,

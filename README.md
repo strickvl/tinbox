@@ -78,7 +78,7 @@ The [translation review guide](docs/translation-review.md) explains how to curat
 
 ### TranslateGemma with oMLX
 
-For a local TranslateGemma server, use the dedicated [TranslateGemma setup](docs/providers.md#translategemma-with-omlx). It supports short text files with an explicit source language; it does not support PDFs, glossaries, or context-aware chunking.
+For a local TranslateGemma server, use the dedicated [TranslateGemma setup](docs/providers.md#translategemma-with-omlx). It supports text files with an explicit source language and splits long files into chunks; it does not support PDFs or glossaries, and it sends no neighbouring context with each chunk.
 
 ## Limits worth knowing
 

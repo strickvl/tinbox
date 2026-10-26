@@ -47,7 +47,7 @@ Use `--output` to get a clean file. Terminal output also includes the translatio
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--algorithm`, `-a` | Automatic | `page` for PDFs and TranslateGemma; `context-aware` for other inputs. `sliding-window` is also accepted for text |
+| `--algorithm`, `-a` | Automatic | `page` for PDFs; `context-aware` for text. `sliding-window` is also accepted for text |
 | `--context-size` | `2000` | Target chunk size in characters for `context-aware` |
 | `--split-token` | None | Split context-aware text on this marker instead of using the target chunk size |
 | `--pdf-dpi` | `200` | Resolution used to convert PDF pages to images |
@@ -67,7 +67,7 @@ The default `minimal` setting maps to the supported minimum for the current mode
 
 For those GPT-6 and Claude models, `low`, `medium`, and `high` map to the corresponding provider effort. Other OpenAI-compatible models receive `reasoning_effort`; other Anthropic models receive thinking budgets of 1,024, 4,096, and 8,192 tokens. Model support varies. Higher effort can increase time and cost. The default chat output budget is 16,384 tokens per request, including reasoning tokens where the provider counts them toward that limit.
 
-TranslateGemma requires an `openai:` model, `OPENAI_BASE_URL`, a `.txt` file, an explicit source language, `page`, and the default reasoning setting. It rejects glossary use and `--split-token`; `--context-size` has no effect in this mode. See [TranslateGemma setup](providers.md#translategemma-with-omlx).
+TranslateGemma requires an `openai:` model, `OPENAI_BASE_URL`, a `.txt` file, an explicit source language, `context-aware` or `page`, and the default reasoning setting. With `context-aware`, `--context-size` and `--split-token` split the file as usual, but each chunk is sent without neighbouring text. It rejects glossary use and review pair export. See [TranslateGemma setup](providers.md#translategemma-with-omlx).
 
 ### Costs and confirmation
 
