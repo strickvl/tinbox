@@ -94,14 +94,6 @@ class ModelInterface(Protocol):
         """
         ...
 
-    async def validate_model(self) -> bool:
-        """Check if the model is available and properly configured.
-
-        Returns:
-            True if the model is available and configured correctly
-        """
-        ...
-
 
 class TranslationWithGlossaryResponse(BaseModel):
     """Structured LLM response when glossary is enabled."""

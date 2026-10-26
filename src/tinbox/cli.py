@@ -138,7 +138,7 @@ def parse_model_spec(model_spec: str) -> tuple[ModelType, str]:
     """Parse a model specification string.
 
     Args:
-        model_spec: Model specification (e.g., 'openai:gpt-4o', 'anthropic:claude-3-sonnet', 'ollama:mistral-small')
+        model_spec: Model specification (e.g., 'openai:gpt-6.1-sol', 'anthropic:claude-sonnet-5-5', 'ollama:gemma4:e2b')
 
     Returns:
         Tuple of (ModelType, str) for the provider and model name.
@@ -149,7 +149,7 @@ def parse_model_spec(model_spec: str) -> tuple[ModelType, str]:
     if ":" not in model_spec:
         raise ValueError(
             "Invalid model specification. Use format 'provider:model' "
-            "(e.g., 'openai:gpt-4o', 'anthropic:claude-3-sonnet', 'ollama:mistral-small')"
+            "(e.g., 'openai:gpt-6.1-sol', 'anthropic:claude-sonnet-5-5', 'ollama:gemma4:e2b')"
         )
 
     provider, model = model_spec.split(":", 1)

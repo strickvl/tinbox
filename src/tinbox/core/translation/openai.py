@@ -283,17 +283,3 @@ class OpenAITranslator(ModelInterface):
         except Exception as e:
             logger.error(f"Translation failed: {e!s}")
             raise TranslationError(f"Translation failed: {e!s}") from e
-
-    async def validate_model(self) -> bool:
-        """Verify the model is available and properly configured."""
-        try:
-            client = self._get_client(ModelType.OPENAI)
-            response = await client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": "test"}],
-                max_tokens=1,
-            )
-            return hasattr(response, "choices") and len(response.choices) > 0
-        except Exception as e:
-            logger.error(f"Model validation failed: {e!s}")
-            return False
