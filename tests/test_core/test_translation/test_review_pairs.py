@@ -23,9 +23,6 @@ class RecordingTranslator:
         self.translations = translations
         self.requests: list[TranslationRequest] = []
 
-    async def validate_model(self) -> bool:
-        return True
-
     async def translate(self, request: TranslationRequest) -> TranslationResponse:
         translation = self.translations[len(self.requests)]
         self.requests.append(request)

@@ -291,17 +291,3 @@ class AnthropicTranslator(ModelInterface):
         except Exception as e:
             logger.error(f"Translation failed: {e!s}")
             raise TranslationError(f"Translation failed: {e!s}") from e
-
-    async def validate_model(self) -> bool:
-        """Verify the model is available and properly configured."""
-        try:
-            client = self._get_client()
-            response = await client.messages.create(
-                model="claude-3-haiku-20240307",
-                messages=[{"role": "user", "content": "test"}],
-                max_tokens=1,
-            )
-            return hasattr(response, "content") and len(response.content) > 0
-        except Exception as e:
-            logger.error(f"Model validation failed: {e!s}")
-            return False
