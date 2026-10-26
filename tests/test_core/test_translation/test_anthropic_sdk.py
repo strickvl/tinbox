@@ -3,7 +3,7 @@
 import json
 from typing import Literal
 
-import httpx
+import httpx2
 import pytest
 from anthropic import AsyncAnthropic
 
@@ -44,7 +44,7 @@ async def test_translation_through_real_sdk(
 ):
     requests: list[dict] = []
 
-    def respond(request: httpx.Request) -> httpx.Response:
+    def respond(request: httpx2.Request) -> httpx2.Response:
         assert request.url.path == "/v1/messages"
         body = json.loads(request.content)
         requests.append(body)
@@ -64,7 +64,7 @@ async def test_translation_through_real_sdk(
         assert "top_k" not in body
         assert body["max_tokens"] == (16384 if max_tokens is None else max_tokens)
         assert body["model"] == model_name
-        return httpx.Response(
+        return httpx2.Response(
             200,
             json={
                 "id": "msg_test",
@@ -85,7 +85,7 @@ async def test_translation_through_real_sdk(
         api_key="test-key",
         base_url="http://test.invalid",
         max_retries=0,
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(respond)),
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
     ) as client:
         translator = (
             AnthropicTranslator()
