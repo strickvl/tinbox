@@ -293,7 +293,7 @@ async def test_reasoning_effort_thinking_config(translator: AnthropicTranslator)
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["thinking"] == {"type": "enabled", "budget_tokens": 8192}
         # Temperature should not be set when thinking is enabled
-        assert "temperature" not in call_kwargs
+        assert "extra_body" not in call_kwargs
 
 
 @pytest.mark.asyncio
@@ -320,7 +320,7 @@ async def test_reasoning_effort_minimal_no_thinking(translator: AnthropicTransla
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert "thinking" not in call_kwargs
-        assert call_kwargs["temperature"] == 0.3
+        assert call_kwargs["extra_body"] == {"temperature": 0.3}
 
 
 @pytest.mark.asyncio

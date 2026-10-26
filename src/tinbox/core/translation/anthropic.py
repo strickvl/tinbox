@@ -210,7 +210,9 @@ class AnthropicTranslator(ModelInterface):
                 kwargs["thinking"] = thinking
                 # Extended thinking requires the default temperature of 1.
             else:
-                kwargs["temperature"] = self.temperature
+                # anthropic>=1.0 dropped `temperature` from its signature; older
+                # models still accept it in the request body.
+                kwargs["extra_body"] = {"temperature": self.temperature}
 
         try:
             return await client.messages.create(**kwargs)
