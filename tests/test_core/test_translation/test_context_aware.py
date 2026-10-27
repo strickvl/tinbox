@@ -147,6 +147,20 @@ class TestSmartTextSplit:
         assert len(result) >= 2
         assert all(len(chunk) <= 10 for chunk in result)
 
+    @pytest.mark.parametrize(
+        ("text", "target_size", "expected"),
+        [
+            ("aaaa  bbbb", 5, ["aaaa  ", "bbbb"]),
+            ("abcde fgh", 5, ["abcde ", "fgh"]),
+            ("abc\n\ndef", 4, ["abc\n\n", "def"]),
+        ],
+    )
+    def test_split_keeps_whitespace_at_window_end(self, text, target_size, expected):
+        """Whitespace at a split stays in the chunk before it, so chunks rejoin."""
+        result = smart_text_split(text, target_size)
+        assert result == expected
+        assert "".join(result) == text
+
 
 class TestBuildTranslationContextInfo:
     """Test translation context information building."""
