@@ -554,18 +554,7 @@ def create_windows(
     if overlap_size >= window_size:
         raise ValueError("Overlap size must be less than window size")
 
-    # smart_text_split can skip whitespace at a split; add it back to the window
-    # before the split so the windows still cover every character of the text
-    windows: list[str] = []
-    pos = 0
-    for chunk in smart_text_split(text, window_size):
-        start = text.index(chunk, pos)
-        if windows:
-            windows[-1] += text[pos:start]
-        windows.append(chunk)
-        pos = start + len(chunk)
-    windows[-1] += text[pos:]
-
+    windows = smart_text_split(text, window_size)
     preceding = [""]
     for window in windows[:-1]:
         preceding.append(
@@ -672,23 +661,17 @@ def smart_text_split(
 
         # Extract the chunk up to the best split position
         actual_end = current_pos + best_split_pos
+        # A split at the window's end can leave whitespace just after it; keep that
+        # whitespace in this chunk so the next chunk starts at a word
+        if best_split_pos == len(chunk_text):
+            while actual_end < len(text) and text[actual_end].isspace():
+                actual_end += 1
         chunk = text[current_pos:actual_end]
 
         if chunk:  # Only add non-empty chunks
             chunks.append(chunk)
 
-        # Move to the next position
-        # Only skip ahead if we found no natural split point (best_split_pos == target_size)
-        if best_split_pos == len(chunk_text) and current_pos + best_split_pos < len(
-            text
-        ):
-            # No natural boundary found, ensure we make progress by skipping whitespace
-            current_pos = actual_end
-            while current_pos < len(text) and text[current_pos].isspace():
-                current_pos += 1
-        else:
-            # Natural boundary found, continue from there
-            current_pos = actual_end
+        current_pos = actual_end
 
     return chunks
 
