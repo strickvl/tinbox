@@ -12,6 +12,9 @@ from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Bump when sliding-window splits text differently, so old checkpoints are not resumed
+SLIDING_WINDOW_SPLIT_VERSION = 2
+
 
 @dataclass
 class TranslationState:
@@ -97,6 +100,7 @@ class CheckpointManager:
                     "algorithm": self.config.algorithm,
                     "translation_protocol": self.config.translation_protocol.value,
                     "local_model": self.config.local_model,
+                    "sliding_window_split_version": SLIDING_WINDOW_SPLIT_VERSION,
                 },
             }
 
@@ -141,6 +145,11 @@ class CheckpointManager:
                 or config.get("translation_protocol", "chat")
                 != self.config.translation_protocol.value
                 or config.get("local_model", False) != self.config.local_model
+                or (
+                    self.config.algorithm == "sliding-window"
+                    and config.get("sliding_window_split_version", 1)
+                    != SLIDING_WINDOW_SPLIT_VERSION
+                )
             ):
                 self._logger.warning(
                     "Checkpoint configuration mismatch",

@@ -437,7 +437,7 @@ async def translate_sliding_window(
             glossary_manager.restore_from_checkpoint(resume_result.glossary_entries)
 
         # Translate remaining windows
-        for i, window in enumerate(
+        for i, (preceding_text, window) in enumerate(
             windows[len(translated_windows) :], len(translated_windows)
         ):
             logger.debug(f"Translating window {i + 1}: {window}")
@@ -446,7 +446,7 @@ async def translate_sliding_window(
                 source_lang=config.source_lang,
                 target_lang=config.target_lang,
                 content=window,
-                context=None,  # No context for sliding-window algorithm
+                context=build_overlap_context(preceding_text),
                 content_type="text/plain",
                 model=config.model,
                 translation_protocol=config.translation_protocol,
@@ -507,8 +507,8 @@ async def translate_sliding_window(
                     f"Translation cost of {total_cost:.2f} exceeded maximum cost of {config.max_cost:.2f}"
                 )
 
-        # Merge windows
-        final_text = merge_chunks(translated_windows, overlap_size)
+        # Windows do not overlap, so their translations join directly
+        final_text = "".join(translated_windows)
         logger.debug(f"Final merged text: {final_text}")
 
         time_taken = (datetime.now() - start_time).total_seconds()
@@ -529,20 +529,21 @@ def create_windows(
     text: str,
     window_size: int,
     overlap_size: int,
-) -> list[str]:
-    """Create overlapping windows from text.
+) -> list[tuple[str, str]]:
+    """Split text into windows, each paired with the source text just before it.
+
+    Windows end at natural boundaries (see `smart_text_split`) and do not overlap,
+    so each character is translated once. The last `overlap_size` characters of
+    the preceding source text are returned separately, to be sent as context only.
 
     Args:
         text: Input text
-        window_size: Size of each window in characters
-        overlap_size: Size of overlap between windows
+        window_size: Target size of each window in characters
+        overlap_size: Number of preceding characters to send as context
 
     Returns:
-        List of text windows
+        List of (preceding_text, window) pairs
     """
-    logger.debug(f"Creating windows for text: {text}")
-    logger.debug(f"Window size: {window_size}, Overlap size: {overlap_size}")
-
     if not text:
         return []
 
@@ -553,68 +554,37 @@ def create_windows(
     if overlap_size >= window_size:
         raise ValueError("Overlap size must be less than window size")
 
-    windows = []
-    start = 0
+    # smart_text_split can skip whitespace at a split; add it back to the window
+    # before the split so the windows still cover every character of the text
+    windows: list[str] = []
+    pos = 0
+    for chunk in smart_text_split(text, window_size):
+        start = text.index(chunk, pos)
+        if windows:
+            windows[-1] += text[pos:start]
+        windows.append(chunk)
+        pos = start + len(chunk)
+    windows[-1] += text[pos:]
 
-    while start < len(text):
-        # Calculate end position
-        end = min(start + window_size, len(text))
-
-        # Extract window
-        window = text[start:end]
-        logger.debug(f"Created window: {window}")
-        windows.append(window)
-
-        # If we've reached the end, break
-        if end == len(text):
-            break
-
-        # Move start position for next window
-        start = end - overlap_size
-
+    preceding = [""]
+    for window in windows[:-1]:
+        preceding.append(
+            (preceding[-1] + window)[-overlap_size:] if overlap_size else ""
+        )
     logger.debug(f"Created {len(windows)} windows")
-    return windows
+    return list(zip(preceding, windows, strict=True))
 
 
-def merge_chunks(chunks: list[str], overlap_size: int) -> str:
-    """Merge translated chunks, handling overlaps.
-
-    Args:
-        chunks: List of translated chunks
-        overlap_size: Size of overlap between chunks
-
-    Returns:
-        Merged text
-    """
-    if not chunks:
-        return ""
-    if len(chunks) == 1:
-        return chunks[0]
-
-    # If no overlap is requested, just join the chunks
-    if overlap_size == 0:
-        return "".join(chunks)
-
-    result = chunks[0]
-    for i in range(1, len(chunks)):
-        current_chunk = chunks[i]
-
-        # Try to find the overlap at the end of the result and start of current chunk
-        for overlap_len in range(
-            min(len(result), len(current_chunk), overlap_size), 0, -1
-        ):
-            end_of_result = result[-overlap_len:]
-            start_of_chunk = current_chunk[:overlap_len]
-
-            if end_of_result == start_of_chunk:
-                # Found overlap, append only the non-overlapping part
-                result += "\n\n" + current_chunk[overlap_len:]
-                break
-        else:
-            # No overlap found, append entire chunk
-            result += "\n\n" + current_chunk
-
-    return result
+def build_overlap_context(preceding_text: str) -> str | None:
+    """Wrap the source text before a window as context the model must not translate."""
+    if not preceding_text:
+        return None
+    return (
+        f"[PRECEDING_TEXT]\n{preceding_text}\n[/PRECEDING_TEXT]\n\n"
+        "This text comes directly before the text to translate and is already "
+        "translated elsewhere. Use it only to understand the text to translate; "
+        "do not include it in your translation."
+    )
 
 
 def smart_text_split(

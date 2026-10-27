@@ -9,7 +9,6 @@ from pydantic import ValidationError
 from tinbox.core.processor import DocumentContent
 from tinbox.core.translation.algorithms import (
     create_windows,
-    merge_chunks,
     translate_context_aware,
     translate_document,
     translate_page_by_page,
@@ -346,16 +345,16 @@ async def test_translation_all_pages_fail(
     ("text", "window_size", "overlap_size", "expected"),
     [
         ("", 4, 0, []),
-        ("abc", 4, 0, ["abc"]),
-        ("abcd", 4, 0, ["abcd"]),
-        ("abcdefgh", 4, 0, ["abcd", "efgh"]),
-        ("abcdefghij", 4, 0, ["abcd", "efgh", "ij"]),
-        ("abcdefghij", 4, 1, ["abcd", "defg", "ghij"]),
-        ("abcdef", 4, 3, ["abcd", "bcde", "cdef"]),
+        ("abc", 4, 0, [("", "abc")]),
+        ("abcdefghij", 4, 0, [("", "abcd"), ("", "efgh"), ("", "ij")]),
+        ("abcdefghij", 4, 1, [("", "abcd"), ("d", "efgh"), ("h", "ij")]),
+        ("abcde fgh", 5, 1, [("", "abcde "), (" ", "fgh")]),
+        ("aaaa  bbbb", 5, 0, [("", "aaaa  "), ("", "bbbb")]),
+        ("One two. Three four.", 12, 4, [("", "One two. "), ("wo. ", "Three four.")]),
     ],
 )
 def test_create_windows(text, window_size, overlap_size, expected):
-    """Test window creation for sliding window translation."""
+    """Windows split at natural breaks and carry the preceding text separately."""
     assert create_windows(text, window_size, overlap_size) == expected
 
 
@@ -397,44 +396,48 @@ async def test_translate_sliding_window_without_overlap(tmp_path, mock_translato
     assert result.text == "ABCDEFGHIJ"
 
 
+async def test_translate_sliding_window_does_not_repeat_overlap(
+    tmp_path, mock_translator
+):
+    config = TranslationConfig(
+        source_lang="en",
+        target_lang="fr",
+        model=ModelType.ANTHROPIC,
+        model_name="claude-3-sonnet",
+        algorithm="sliding-window",
+        input_file=tmp_path / "test.txt",
+        window_size=40,
+        overlap_size=15,
+    )
+    text = "Alpha beta gamma delta. Epsilon zeta eta theta. Iota kappa lambda mu."
+    content = DocumentContent(pages=[text], content_type="text/plain", metadata={})
+
+    async def translate(request):
+        # Like a real model, treat the start of each request as a sentence start,
+        # so two translations of the same overlap text differ slightly.
+        translated = request.content.upper()
+        return TranslationResponse(
+            text=translated[:1] + translated[1:2].lower() + translated[2:],
+            tokens_used=1,
+            cost=0.001,
+            time_taken=0.01,
+        )
+
+    mock_translator.translate.side_effect = translate
+
+    result = await translate_sliding_window(content, config, mock_translator)
+
+    assert result.text.upper() == text.upper()
+    second_request = mock_translator.translate.call_args_list[1].args[0]
+    assert second_request.content.startswith("Epsilon")
+    assert "gamma delta. " in second_request.context
+
+
 def test_translation_config_rejects_negative_overlap(test_config):
     with pytest.raises(ValidationError, match="overlap_size"):
         TranslationConfig.model_validate(
             test_config.model_dump() | {"overlap_size": -1}
         )
-
-
-def test_merge_chunks():
-    """Test chunk merging for sliding window translation."""
-    chunks = [
-        "First chunk with overlap",
-        "with overlap and more",
-        "and more final content",
-    ]
-
-    # Test with smaller overlap to ensure proper merging
-    result = merge_chunks(chunks, overlap_size=12)
-    assert result
-    assert isinstance(result, str)
-
-    # Verify content preservation
-    assert "First chunk" in result
-    assert "and more" in result
-    assert "final content" in result
-
-    # Verify proper overlap handling
-    assert result.count("with overlap") == 1  # Should only appear once after merging
-    assert result.count("and more") == 1  # Should only appear once after merging
-
-    # Test with no overlap
-    no_overlap_result = merge_chunks(chunks, overlap_size=0)
-    assert no_overlap_result == "".join(chunks)
-
-    # Test with full overlap
-    full_overlap_result = merge_chunks(chunks, overlap_size=len(chunks[0]))
-    assert len(full_overlap_result) > 0
-    assert "First chunk" in full_overlap_result
-    assert "final content" in full_overlap_result
 
 
 async def test_translate_document_context_aware(
