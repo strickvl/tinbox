@@ -54,7 +54,7 @@ Use `--output` to get a clean file. Terminal output also includes the translatio
 | `--translation-protocol` | `chat` | `chat` for the normal JSON response protocol, or `translategemma` for plain-text completions |
 | `--reasoning-effort` | `minimal` | `minimal`, `low`, `medium`, or `high`; support depends on the provider and model |
 
-PDFs only support `page`. The `page` algorithm sends one request per page; for a text file it sends the whole file. `context-aware` sends text chunks with surrounding context. `sliding-window` uses overlapping text windows; the CLI does not expose its window or overlap sizes. See [chunking examples](workflows.md#split-long-text).
+PDFs only support `page`. The `page` algorithm sends one request per page; for a text file it sends the whole file. `context-aware` sends text chunks with surrounding context. `sliding-window` splits text into windows of about 1,000 characters at paragraph and sentence breaks, and sends the last 100 characters before each window as context the model must not translate; the CLI does not expose its window or overlap sizes. See [chunking examples](workflows.md#split-long-text).
 
 The default `minimal` setting maps to the supported minimum for the current models:
 
