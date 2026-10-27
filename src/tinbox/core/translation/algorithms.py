@@ -554,7 +554,18 @@ def create_windows(
     if overlap_size >= window_size:
         raise ValueError("Overlap size must be less than window size")
 
-    windows = smart_text_split(text, window_size)
+    # smart_text_split can skip whitespace at a split; add it back to the window
+    # before the split so the windows still cover every character of the text
+    windows: list[str] = []
+    pos = 0
+    for chunk in smart_text_split(text, window_size):
+        start = text.index(chunk, pos)
+        if windows:
+            windows[-1] += text[pos:start]
+        windows.append(chunk)
+        pos = start + len(chunk)
+    windows[-1] += text[pos:]
+
     preceding = [""]
     for window in windows[:-1]:
         preceding.append(

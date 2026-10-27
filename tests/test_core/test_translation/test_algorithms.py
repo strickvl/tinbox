@@ -348,6 +348,8 @@ async def test_translation_all_pages_fail(
         ("abc", 4, 0, [("", "abc")]),
         ("abcdefghij", 4, 0, [("", "abcd"), ("", "efgh"), ("", "ij")]),
         ("abcdefghij", 4, 1, [("", "abcd"), ("d", "efgh"), ("h", "ij")]),
+        ("abcde fgh", 5, 1, [("", "abcde "), (" ", "fgh")]),
+        ("aaaa  bbbb", 5, 0, [("", "aaaa  "), ("", "bbbb")]),
         ("One two. Three four.", 12, 4, [("", "One two. "), ("wo. ", "Three four.")]),
     ],
 )

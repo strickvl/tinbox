@@ -1,5 +1,6 @@
 """Tests for resuming translation algorithms from checkpoints."""
 
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -506,3 +507,39 @@ async def test_sliding_window_all_chunks_completed():
 
     # Should NOT save new checkpoints since no new work was done
     checkpoint_manager.save.assert_not_called()
+
+
+async def test_sliding_window_ignores_checkpoint_from_old_window_split(tmp_path):
+    """Checkpoints saved before windows split at natural breaks are not resumed."""
+    config = TranslationConfig(
+        source_lang="en",
+        target_lang="fr",
+        model=ModelType.ANTHROPIC,
+        model_name="claude-3-sonnet",
+        algorithm="sliding-window",
+        input_file=tmp_path / "test.txt",
+        checkpoint_dir=tmp_path,
+        resume_from_checkpoint=True,
+    )
+    manager = CheckpointManager(config)
+    await manager.save(
+        TranslationState(
+            source_lang="en",
+            target_lang="fr",
+            algorithm="sliding-window",
+            completed_pages=[1],
+            failed_pages=[],
+            translated_chunks={1: "Translated window 1"},
+            token_usage=10,
+            cost=0.001,
+            time_taken=1.0,
+        )
+    )
+    assert await manager.load() is not None
+
+    checkpoint_path = tmp_path / "test_checkpoint.json"
+    data = json.loads(checkpoint_path.read_text())
+    del data["config"]["sliding_window_split_version"]
+    checkpoint_path.write_text(json.dumps(data))
+
+    assert await manager.load() is None
