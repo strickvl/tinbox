@@ -171,7 +171,7 @@ def test_translate_basic(
                 return_value=mock_document_content,
             ),
             patch("tinbox.cli.create_translator", return_value=mock_model_interface),
-            patch("tinbox.cli.console"),
+            patch("tinbox.cli.status_console"),
         ):
             result = cli_runner.invoke(
                 app,
@@ -199,7 +199,7 @@ def test_translate_dry_run(cli_runner, mock_cost_estimate):
     try:
         with (
             patch("tinbox.cli.estimate_cost", return_value=mock_cost_estimate),
-            patch("tinbox.cli.console"),
+            patch("tinbox.cli.status_console"),
         ):
             result = cli_runner.invoke(
                 app,
@@ -235,7 +235,7 @@ def test_translate_with_warnings(cli_runner):
     try:
         with (
             patch("tinbox.cli.estimate_cost", return_value=estimate),
-            patch("tinbox.cli.console") as mock_console,
+            patch("tinbox.cli.status_console") as mock_console,
             patch("typer.confirm", return_value=False),
         ):
             result = cli_runner.invoke(
@@ -283,7 +283,7 @@ def test_translate_with_output_file(
                 return_value=mock_document_content,
             ),
             patch("tinbox.cli.create_translator", return_value=mock_model_interface),
-            patch("tinbox.cli.console"),
+            patch("tinbox.cli.status_console"),
         ):
             result = cli_runner.invoke(
                 app,
@@ -347,7 +347,7 @@ def test_translate_verbose_mode(
                 return_value=mock_document_content,
             ),
             patch("tinbox.cli.create_translator", return_value=mock_model_interface),
-            patch("tinbox.cli.console"),
+            patch("tinbox.cli.status_console"),
         ):
             result = cli_runner.invoke(
                 app,
@@ -392,7 +392,7 @@ def test_translate_force_mode(
                 return_value=mock_document_content,
             ),
             patch("tinbox.cli.create_translator", return_value=mock_model_interface),
-            patch("tinbox.cli.console"),
+            patch("tinbox.cli.status_console"),
         ):
             result = cli_runner.invoke(
                 app,
@@ -430,7 +430,7 @@ def test_translate_max_cost(cli_runner):
     try:
         with (
             patch("tinbox.cli.estimate_cost", return_value=estimate),
-            patch("tinbox.cli.console") as mock_console,
+            patch("tinbox.cli.status_console") as mock_console,
             patch("typer.confirm", return_value=False),
         ):
             result = cli_runner.invoke(
@@ -464,7 +464,7 @@ def test_cli_context_aware_default(cli_runner, tmp_path):
         patch("tinbox.cli.load_document") as mock_load,
         patch("tinbox.cli.create_translator"),
         patch("tinbox.cli.translate_document") as mock_translate,
-        patch("tinbox.cli.console"),
+        patch("tinbox.cli.status_console"),
     ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
@@ -508,7 +508,7 @@ def test_pdf_auto_selects_page_algorithm(cli_runner, tmp_path):
         patch("tinbox.cli.load_document") as mock_load,
         patch("tinbox.cli.create_translator"),
         patch("tinbox.cli.translate_document") as mock_translate,
-        patch("tinbox.cli.console"),
+        patch("tinbox.cli.status_console"),
     ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
@@ -548,7 +548,7 @@ def test_pdf_rejects_context_aware_algorithm(cli_runner, tmp_path):
     input_file = tmp_path / "test.pdf"
     input_file.write_bytes(b"%PDF-1.4 test")
 
-    with patch("tinbox.cli.console") as mock_console:
+    with patch("tinbox.cli.status_console") as mock_console:
         # Explicitly specify context-aware for PDF - should fail
         result = cli_runner.invoke(
             app,
@@ -604,7 +604,7 @@ def test_translate_reasoning_effort_default(cli_runner, tmp_path):
         patch("tinbox.cli.load_document") as mock_load,
         patch("tinbox.cli.create_translator"),
         patch("tinbox.cli.translate_document") as mock_translate,
-        patch("tinbox.cli.console"),
+        patch("tinbox.cli.status_console"),
     ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
@@ -647,7 +647,7 @@ def test_translate_reasoning_effort_high(cli_runner, tmp_path):
         patch("tinbox.cli.load_document") as mock_load,
         patch("tinbox.cli.create_translator"),
         patch("tinbox.cli.translate_document") as mock_translate,
-        patch("tinbox.cli.console"),
+        patch("tinbox.cli.status_console"),
     ):
         # Setup mocks
         mock_estimate.return_value = CostEstimate(
@@ -733,7 +733,7 @@ def test_translate_with_checkpoints_cleanup_success(
         ),
         patch("tinbox.cli.create_translator", return_value=mock_model_interface),
         patch("tinbox.cli.CheckpointManager", return_value=mock_checkpoint_manager),
-        patch("tinbox.cli.console"),
+        patch("tinbox.cli.status_console"),
     ):
         result = cli_runner.invoke(
             app,
@@ -786,7 +786,7 @@ def test_translate_with_checkpoints_no_cleanup_without_checkpoint_dir(
         ),
         patch("tinbox.cli.create_translator", return_value=mock_model_interface),
         patch("tinbox.cli.CheckpointManager") as mock_checkpoint_class,
-        patch("tinbox.cli.console"),
+        patch("tinbox.cli.status_console"),
     ):
         result = cli_runner.invoke(
             app,
@@ -849,7 +849,7 @@ def test_translate_with_checkpoints_cleanup_called_after_output_written(
         ),
         patch("tinbox.cli.create_translator", return_value=mock_model_interface),
         patch("tinbox.cli.CheckpointManager", return_value=mock_checkpoint_manager),
-        patch("tinbox.cli.console"),
+        patch("tinbox.cli.status_console"),
     ):
         # Mock the handler.write method to track when it's called
         with patch("tinbox.cli.create_handler") as mock_create_handler:

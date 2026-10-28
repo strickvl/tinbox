@@ -11,6 +11,7 @@ from tinbox.core.processor import (
     FileType,
     ProcessingError,
 )
+from tinbox.core.types import is_text_file
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -87,7 +88,7 @@ class TextProcessor(BaseDocumentProcessor):
         if not file_path.exists():
             raise ProcessingError("File not found")
 
-        if file_path.suffix.lower() != ".txt":
+        if not is_text_file(file_path):
             raise ProcessingError("File format not supported")
 
         try:

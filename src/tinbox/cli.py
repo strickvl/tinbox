@@ -58,7 +58,7 @@ from tinbox.core.review_matches import load_matches, save_matches, unchecked_mat
 from tinbox.core.translation import create_translator
 from tinbox.core.translation.checkpoint import CheckpointManager
 from tinbox.core.translation.glossary import GlossaryManager
-from tinbox.core.types import TranslationProtocol
+from tinbox.core.types import TranslationProtocol, file_type_for_path
 from tinbox.utils.language import LanguageError, validate_language_pair
 from tinbox.utils.logging import configure_logging, get_logger
 
@@ -68,6 +68,9 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+# Translation plans, progress, and statistics go to stderr, so stdout carries
+# only the translation when it is printed or redirected
+status_console = Console(stderr=True)
 logger = get_logger()
 
 
@@ -126,12 +129,12 @@ def display_cost_estimate(estimate, model: ModelType, *, local: bool = False) ->
     )
     table.add_row("Cost Level", estimate.cost_level.value.title())
 
-    console.print(table)
+    status_console.print(table)
 
     if estimate.warnings:
-        console.print("\n[yellow]Warnings:[/yellow]")
+        status_console.print("\n[yellow]Warnings:[/yellow]")
         for warning in estimate.warnings:
-            console.print(f"• {warning}")
+            status_console.print(f"• {warning}")
 
 
 def parse_model_spec(model_spec: str) -> tuple[ModelType, str]:
@@ -298,7 +301,7 @@ def translate(
                 effective_source, target_lang
             )
         except LanguageError as e:
-            console.print(f"[red]Error:[/red] {e}")
+            status_console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
 
         # Validate reasoning effort parameter
@@ -313,7 +316,7 @@ def translate(
         model_type, model_name = parse_model_spec(model)
 
         # Determine file type
-        file_type = FileType(input_file.suffix.lstrip(".").lower())
+        file_type = file_type_for_path(input_file)
 
         # Auto-select algorithm based on file type, or validate user's choice
         if algorithm is None:
@@ -325,7 +328,7 @@ def translate(
             effective_algorithm = algorithm
             # Validate: PDF files only work with 'page' algorithm
             if file_type == FileType.PDF and algorithm != "page":
-                console.print(
+                status_console.print(
                     f"\n[red]Error:[/red] PDF files only support the 'page' algorithm.\n"
                     f"PDFs are processed as images and cannot use '{algorithm}' algorithm.\n"
                     f"Please use: tinbox translate {input_file} --algorithm page --model {model}"
@@ -402,7 +405,7 @@ def translate(
         )
 
         # Display cost estimate
-        console.print("\n[bold]Translation Plan[/bold]")
+        status_console.print("\n[bold]Translation Plan[/bold]")
         display_cost_estimate(estimate, model_type, local=local_model)
 
         # In dry-run mode, exit after showing estimate
@@ -411,12 +414,12 @@ def translate(
 
         # Check for warnings and confirm if needed
         if not force and estimate.warnings and estimate.requires_confirmation:
-            console.print(
+            status_console.print(
                 "\n[yellow]Review the token and cost estimates above before proceeding.[/yellow]"
             )
-            proceed = typer.confirm("Do you want to proceed?")
+            proceed = typer.confirm("Do you want to proceed?", err=True)
             if not proceed:
-                console.print("\nTranslation cancelled.")
+                status_console.print("\nTranslation cancelled.")
                 raise typer.Exit(1)
 
         # Load document (pass DPI setting for PDF files)
@@ -456,7 +459,7 @@ def translate(
             EstimatedCostColumn(),
             TimeElapsedColumn(),
             TimeRemainingColumn(),
-            console=console,
+            console=status_console,
         ) as progress:
             # Run translation
             response = asyncio.run(
@@ -536,7 +539,7 @@ def translate(
                 )
                 save_review_bundle(bundle, save_review_input)
             except (OSError, ValueError) as e:
-                console.print(
+                status_console.print(
                     f"[red]Review bundle could not be saved:[/red] {escape(str(e))}\n"
                     "Translation output has already been written "
                     + (
@@ -546,7 +549,7 @@ def translate(
                     )
                 )
                 sys.exit(1)
-            console.print(
+            status_console.print(
                 f"Review input saved to {escape(str(save_review_input))} "
                 f"({len(bundle.pairs)} chunks)."
             )
@@ -562,11 +565,11 @@ def translate(
             if not is_local_model(model_type, local=local_model):
                 table.add_row("Final Cost", f"${result.cost:.4f}")
 
-            console.print("\n", table)
+            status_console.print("\n", table)
 
     except Exception as e:
         logger.exception("Translation failed")
-        console.print(f"[red]Error: {e!s}[/red]")
+        status_console.print(f"[red]Error: {e!s}[/red]")
         sys.exit(1)
 
 

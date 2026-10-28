@@ -18,7 +18,7 @@ def reset_logging_and_console():
 
     The issue occurs because:
     - structlog is configured with cache_logger_on_first_use=True
-    - CLI tests patch tinbox.cli.console or use CliRunner which captures stderr
+    - CLI tests patch tinbox.cli.console/status_console or use CliRunner which captures stderr
     - After the test exits, cached loggers and console objects hold stale file handles
     - Subsequent tests fail with "I/O operation on closed file"
     """
@@ -35,6 +35,7 @@ def reset_logging_and_console():
     import tinbox.core.translation.algorithms
 
     tinbox.cli.console = Console(force_terminal=False)
+    tinbox.cli.status_console = Console(force_terminal=False, stderr=True)
     tinbox.cli.logger = structlog.get_logger()
     tinbox.core.translation.algorithms.logger = structlog.get_logger()
 
@@ -50,5 +51,6 @@ def reset_logging_and_console():
     import tinbox.core.translation.algorithms
 
     tinbox.cli.console = Console(force_terminal=False)
+    tinbox.cli.status_console = Console(force_terminal=False, stderr=True)
     tinbox.cli.logger = structlog.get_logger()
     tinbox.core.translation.algorithms.logger = structlog.get_logger()

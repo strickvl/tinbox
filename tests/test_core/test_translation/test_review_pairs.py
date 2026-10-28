@@ -128,7 +128,7 @@ def test_pair_capture_rejects_unsupported_inputs(
     suffix: str,
     algorithm: Literal["page", "sliding-window", "context-aware"],
 ) -> None:
-    with pytest.raises(ValidationError, match=r"\.txt files.*context-aware"):
+    with pytest.raises(ValidationError, match=r"plain-text files.*context-aware"):
         review_config(
             tmp_path, input_file=tmp_path / f"source{suffix}", algorithm=algorithm
         )

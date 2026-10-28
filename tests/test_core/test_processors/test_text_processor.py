@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from tinbox.core.processor import DocumentMetadata, ProcessingError
+from tinbox.core.processor import DocumentMetadata, ProcessingError, load_document
 from tinbox.core.processor.text import TextProcessor
-from tinbox.core.types import FileType
+from tinbox.core.types import FileType, file_type_for_path
 
 
 @pytest.fixture
@@ -115,3 +115,35 @@ async def test_text_processor_invalid_file(processor: TextProcessor, tmp_path: P
     invalid_file.write_text("Not a text file")
     with pytest.raises(ProcessingError, match="not supported"):
         await processor.get_metadata(invalid_file)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("a.txt", FileType.TXT),
+        ("a.md", FileType.TXT),
+        ("a.Markdown", FileType.TXT),
+        ("a.rst", FileType.TXT),
+        ("a.org", FileType.TXT),
+        ("a.PDF", FileType.PDF),
+        ("a.docx", FileType.DOCX),
+    ],
+)
+def test_file_type_for_path(name: str, expected: FileType) -> None:
+    assert file_type_for_path(Path(name)) == expected
+
+
+@pytest.mark.parametrize("name", ["a.csv", "a.html", "README"])
+def test_file_type_for_path_rejects_unsupported(name: str) -> None:
+    with pytest.raises(ValueError, match="Unsupported file type"):
+        file_type_for_path(Path(name))
+
+
+async def test_markdown_file_loads_as_text(tmp_path: Path) -> None:
+    file_path = tmp_path / "notes.md"
+    file_path.write_text("# Title\n\nSome *text*.\n")
+
+    content = await load_document(file_path)
+
+    assert content.pages == ["# Title\n\nSome *text*.\n"]
+    assert content.metadata["file_type"] == FileType.TXT

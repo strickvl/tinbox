@@ -32,7 +32,7 @@ tinbox translate note.txt --from en --to de \
 cat note.de.txt
 ```
 
-Tinbox shows a translation plan, progress, and statistics in the terminal. `note.de.txt` contains only the translated text, for example:
+Tinbox shows a translation plan, progress, and statistics in the terminal on stderr. `note.de.txt` contains only the translated text, for example:
 
 ```text
 Die Bibliothek öffnet um neun.
@@ -46,7 +46,7 @@ Prefer a local model? Use [Gemma 4 with Ollama](docs/providers.md#connect-to-oll
 
 | Input | How Tinbox reads it | What to expect |
 | --- | --- | --- |
-| `.txt` | Reads text and splits it into chunks by default | Context-aware translation for longer text |
+| `.txt`, `.md`, `.markdown`, `.rst`, `.org`, `.adoc`, `.asciidoc`, `.text` | Reads plain text and splits it into chunks by default | Context-aware translation for longer text; markup is passed to the model, which is asked to keep it |
 | `.pdf` | Converts each page to an image | Requires Poppler, PDF dependencies, and a vision-capable model |
 | `.docx` | Extracts paragraph text | Table contents are omitted; Word formatting and page layout are not preserved |
 
