@@ -23,7 +23,7 @@ The output contains translated text. Tinbox does not export a translated PDF or 
 
 ## Choose an output format
 
-Use `--output` to write a clean file. Without it, the translation shares stdout with the translation plan and potentially progress or logs, including when you select JSON.
+Use `--output` or redirect stdout to write a clean file. The translation plan, progress, statistics, and logs go to stderr, so stdout carries only the selected output, including when you select JSON.
 
 Choose one of these formats:
 

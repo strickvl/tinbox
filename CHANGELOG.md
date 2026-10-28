@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Read `.md`, `.markdown`, `.rst`, `.org`, `.adoc`, `.asciidoc`, and `.text` files as plain text, the same way as `.txt` (#43). Unsupported extensions now name the supported ones instead of failing with `'md' is not a valid FileType`.
+- Print the translation plan, cost estimate, progress, statistics, and errors from `tinbox translate` to stderr (#44). Stdout now carries only the translation, so `tinbox translate notes.md ... > notes.de.md` writes a clean file. Scripts that parsed those tables from stdout should read stderr instead.
+
 ## 0.4.0 (2026-10-26)
 
 - Split long `.txt` inputs for `--translation-protocol translategemma` at paragraph and sentence breaks, or at `--split-token`, and send each chunk as its own request (#39). TranslateGemma now defaults to `context-aware` splitting instead of one request per file; each chunk is sent without neighbouring text because the model's fixed prompt has no place for it. Use `--algorithm page` for the previous behaviour. Review pair export is rejected for this protocol.

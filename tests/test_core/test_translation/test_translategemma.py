@@ -109,7 +109,7 @@ async def test_translategemma_real_sdk(text: str, finish_reason: str):
             ".txt",
             "glossary or reasoning",
         ),
-        (["--from", "de"], ".pdf", ".txt files"),
+        (["--from", "de"], ".pdf", "plain-text files"),
         (
             ["--from", "de", "--save-review-input", "review.json"],
             ".txt",
@@ -185,13 +185,13 @@ def test_translategemma_cli_with_real_sdk(tmp_path: Path, monkeypatch):
         )
     finally:
         asyncio.run(client.close())
-    assert result.exit_code == 0, result.stdout
+    assert result.exit_code == 0, result.stderr
     assert output.read_text() == "  Hello, world!\n"
     assert len(requests) == 1
-    assert "None (local model)" in result.stdout
-    assert "Estimated Cost" not in result.stdout
-    assert "Final Cost" not in result.stdout
-    assert "potential issues" not in result.stdout
+    assert "None (local model)" in result.stderr
+    assert "Estimated Cost" not in result.stderr
+    assert "Final Cost" not in result.stderr
+    assert "potential issues" not in result.stderr
 
 
 @pytest.mark.parametrize(
@@ -249,7 +249,7 @@ def test_translategemma_cli_splits_long_files_without_context(
         )
     finally:
         asyncio.run(client.close())
-    assert result.exit_code == 0, result.stdout
+    assert result.exit_code == 0, result.stderr
     assert prompts[0] == GERMAN_TO_ENGLISH_PROMPT
     assert len(prompts) == 2
     assert "Hallo" not in prompts[1]
@@ -257,7 +257,7 @@ def test_translategemma_cli_splits_long_files_without_context(
     if "--split-token" in arguments:
         expected = "Hello, world!Good morning!\n"
     assert output.read_text() == expected
-    assert "Context-aware algorithm uses additional input tokens" not in result.stdout
+    assert "Context-aware algorithm uses additional input tokens" not in result.stderr
 
 
 def test_ollama_context_notice_does_not_require_confirmation(
@@ -310,10 +310,10 @@ def test_ollama_context_notice_does_not_require_confirmation(
         )
     finally:
         asyncio.run(client.close())
-    assert result.exit_code == 0, result.stdout
+    assert result.exit_code == 0, result.stderr
     assert output.read_text() == "Hello, world!"
-    assert "Do you want to proceed?" not in result.stdout
-    assert "approximate" in result.stdout
+    assert "Do you want to proceed?" not in result.stderr
+    assert "approximate" in result.stderr
 
 
 @pytest.mark.asyncio

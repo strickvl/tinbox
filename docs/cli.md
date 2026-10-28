@@ -13,7 +13,7 @@ tinbox review REVIEW_INPUT --output REPORT_HTML [OPTIONS]
 tinbox doctor [--json]
 ```
 
-`INPUT_FILE` must be an existing `.txt`, `.pdf`, or `.docx` file. `REVIEW_INPUT` is a saved review bundle from `translate --save-review-input`. Run `tinbox --help` or add `--help` after any command for the installed version's help.
+`INPUT_FILE` must be an existing plain-text (`.txt`, `.md`, `.markdown`, `.rst`, `.org`, `.adoc`, `.asciidoc`, or `.text`), `.pdf`, or `.docx` file. Plain-text formats are all read the same way, and every `.txt` rule below applies to them. `REVIEW_INPUT` is a saved review bundle from `translate --save-review-input`. Run `tinbox --help` or add `--help` after any command for the installed version's help.
 
 Global options go before the command:
 
@@ -41,7 +41,7 @@ Global options go before the command:
 | `--verbose` | Off | Accepted but currently has no effect; use global `--log-level DEBUG` for diagnostic logs |
 | `--help` | | Show translation help and exit |
 
-Use `--output` to get a clean file. Terminal output also includes the translation plan and progress. JSON contains metadata, results, warnings, and errors. Markdown is a report with the translation in a text code block, not a recreation of the source document's formatting.
+The translation plan, progress, statistics, and errors go to stderr, so stdout carries only the selected output: `tinbox translate notes.md --to de --model MODEL > notes.de.md` writes a clean file, as does `--output`. JSON contains metadata, results, warnings, and errors. Markdown is a report with the translation in a text code block, not a recreation of the source document's formatting.
 
 ### Algorithms and models
 

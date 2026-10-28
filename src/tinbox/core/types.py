@@ -18,6 +18,34 @@ class FileType(StrEnum):
     TXT = "txt"
 
 
+# Plain-text formats, including lightweight markup, all read as FileType.TXT
+TEXT_EXTENSIONS = frozenset(
+    {".txt", ".text", ".md", ".markdown", ".rst", ".org", ".adoc", ".asciidoc"}
+)
+
+
+def is_text_file(path: Path) -> bool:
+    """Return whether a path has a plain-text extension."""
+    return path.suffix.lower() in TEXT_EXTENSIONS
+
+
+def file_type_for_path(path: Path) -> FileType:
+    """Map a file's extension to the FileType that reads it.
+
+    Raises:
+        ValueError: If the extension is not supported
+    """
+    if is_text_file(path):
+        return FileType.TXT
+    suffix = path.suffix.lower()
+    if suffix in (".pdf", ".docx"):
+        return FileType(suffix.lstrip("."))
+    supported = ", ".join(sorted({*TEXT_EXTENSIONS, ".pdf", ".docx"}))
+    raise ValueError(
+        f"Unsupported file type '{path.suffix or path.name}'. Supported: {supported}"
+    )
+
+
 class ModelType(StrEnum):
     """Supported LLM model providers."""
 
@@ -136,12 +164,11 @@ class TranslationConfig(BaseModel):
                 raise ValueError(
                     "TranslateGemma requires an explicit source language (--from)"
                 )
-            if (
-                self.algorithm not in ("context-aware", "page")
-                or self.input_file.suffix.lower() != ".txt"
+            if self.algorithm not in ("context-aware", "page") or not is_text_file(
+                self.input_file
             ):
                 raise ValueError(
-                    "TranslateGemma supports .txt files with "
+                    "TranslateGemma supports plain-text files with "
                     "--algorithm context-aware or page only"
                 )
             if self.use_glossary or self.reasoning_effort != "minimal":
@@ -155,11 +182,10 @@ class TranslationConfig(BaseModel):
     @model_validator(mode="after")
     def validate_review_pair_support(self) -> Self:
         if self.preserve_review_pairs and (
-            self.algorithm != "context-aware"
-            or self.input_file.suffix.lower() != ".txt"
+            self.algorithm != "context-aware" or not is_text_file(self.input_file)
         ):
             raise ValueError(
-                "Review pair preservation supports .txt files with "
+                "Review pair preservation supports plain-text files with "
                 "--algorithm context-aware only"
             )
         return self

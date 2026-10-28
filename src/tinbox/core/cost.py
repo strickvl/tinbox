@@ -6,7 +6,7 @@ import math
 from enum import StrEnum
 from pathlib import Path
 
-from tinbox.core.types import FileType, ModelType
+from tinbox.core.types import FileType, ModelType, file_type_for_path
 
 
 class CostLevel(StrEnum):
@@ -77,9 +77,9 @@ def estimate_document_tokens(file_path: Path) -> int:
         These are rough estimates:
         - PDF: 500 tokens per page
         - DOCX: 1.3 tokens per word, rounded up
-        - TXT: 1 token per 4 characters, rounded up
+        - Plain text: 1 token per 4 characters, rounded up
     """
-    file_type = FileType(file_path.suffix.lstrip(".").lower())
+    file_type = file_type_for_path(file_path)
 
     # Read sample of document to estimate tokens
     if file_type == FileType.PDF:
@@ -98,7 +98,7 @@ def estimate_document_tokens(file_path: Path) -> int:
         word_count = sum(len(p.text.split()) for p in doc.paragraphs)
         # Rough estimate: 1.3 tokens per word, rounded up
         return int(word_count * 1.3 + 0.999)  # Round up by adding 0.999
-    else:  # TXT
+    else:  # Plain text
         # For text files, estimate based on character count
         text = file_path.read_text()
         # Rough estimate: 1 token per 4 characters, rounded up

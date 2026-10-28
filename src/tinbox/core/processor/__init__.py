@@ -9,7 +9,7 @@ from typing import Any, Protocol, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from tinbox.core.types import FileType
+from tinbox.core.types import FileType, file_type_for_path
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -136,9 +136,9 @@ class BaseDocumentProcessor(ABC):
             raise ProcessingError(f"Not a file: {file_path}")
 
         try:
-            file_type = FileType(file_path.suffix.lstrip(".").lower())
-        except ValueError:
-            raise ProcessingError(f"Unsupported file type: {file_path.suffix}")
+            file_type = file_type_for_path(file_path)
+        except ValueError as e:
+            raise ProcessingError(str(e)) from e
 
         if not self.supports_file_type(file_type):
             raise ProcessingError(
@@ -204,7 +204,7 @@ async def load_document(
         ProcessingError: If document loading fails
     """
     try:
-        file_type = FileType(file_path.suffix.lstrip(".").lower())
+        file_type = file_type_for_path(file_path)
         processor = get_processor_for_file_type(file_type, settings=processor_settings)
 
         # Get metadata first
