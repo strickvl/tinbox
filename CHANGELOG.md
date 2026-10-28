@@ -1,9 +1,20 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-10-28)
 
 - Read `.md`, `.markdown`, `.rst`, `.org`, `.adoc`, `.asciidoc`, and `.text` files as plain text, the same way as `.txt` (#43). Unsupported extensions now name the supported ones instead of failing with `'md' is not a valid FileType`.
 - Print the translation plan, cost estimate, progress, statistics, and errors from `tinbox translate` to stderr (#44). Stdout now carries only the translation, so `tinbox translate notes.md ... > notes.de.md` writes a clean file. Scripts that parsed those tables from stdout should read stderr instead.
+- Send the overlap between `sliding-window` windows as context the model must not translate, instead of translating it twice. Keep whitespace between windows, and skip incompatible checkpoints saved by older versions (#41).
+- Keep whitespace when `smart_text_split` splits at the end of a window (#42).
+
+### Upgrade
+
+```bash
+uv tool upgrade tinbox
+tinbox --version
+```
+
+When changing extras or Python versions, or replacing a GitHub installation, use `uv tool install --force --python 3.13 "tinbox[all]>=0.5.0"`.
 
 ## 0.4.0 (2026-10-26)
 

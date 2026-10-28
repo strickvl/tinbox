@@ -4,6 +4,6 @@ This package provides functionality for translating documents using various LLM 
 supporting multiple input formats and translation algorithms.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __author__ = "strickvl"
 __license__ = "MIT"
