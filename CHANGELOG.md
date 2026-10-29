@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 (2026-10-29)
+
+- Accept Latin as a source or target language: `la`, `lat`, or `latin` (#47).
+- Ignore invisible characters, such as zero-width spaces, in `--from` and `--to` language codes (#47). A command pasted from a web page or chat app could carry one, and `--from fr` then failed with `Unsupported language code: fr`. That error now escapes non-ASCII characters, so a look-alike letter shows up as, for example, `'f\u0433'`.
+
+### Upgrade
+
+```bash
+uv tool upgrade tinbox
+tinbox --version
+```
+
+When changing extras or Python versions, or replacing a GitHub installation, use `uv tool install --force --python 3.13 "tinbox[all]>=0.5.1"`.
+
 ## 0.5.0 (2026-10-28)
 
 - Read `.md`, `.markdown`, `.rst`, `.org`, `.adoc`, `.asciidoc`, and `.text` files as plain text, the same way as `.txt` (#43). Unsupported extensions now name the supported ones instead of failing with `'md' is not a valid FileType`.
