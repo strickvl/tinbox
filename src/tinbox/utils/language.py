@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,6 +38,7 @@ class LanguageCode(StrEnum):
     FINNISH = "fi"
     GREEK = "el"
     HEBREW = "he"
+    LATIN = "la"
     AUTO = "auto"  # Special case for auto-detection
 
 
@@ -77,6 +79,9 @@ LANGUAGE_ALIASES: dict[str, str] = {
     "rus": "ru",
     "russian": "ru",
     "русский": "ru",
+    # Latin aliases
+    "lat": "la",
+    "latin": "la",
     # Auto-detection aliases
     "auto": "auto",
     "detect": "auto",
@@ -114,7 +119,10 @@ def normalize_language_code(code: str) -> str:
     Raises:
         LanguageError: If the language code is not recognized
     """
-    normalized = code.lower().strip()
+    # Drop invisible format characters (e.g. zero-width spaces) that ride along
+    # when a command is copied from a web page or chat app.
+    visible = "".join(ch for ch in code if unicodedata.category(ch) != "Cf")
+    normalized = visible.lower().strip()
 
     # Check if it's already a valid ISO 639-1 code
     try:
@@ -127,7 +135,7 @@ def normalize_language_code(code: str) -> str:
         return LANGUAGE_ALIASES[normalized]
 
     raise LanguageError(
-        f"Unsupported language code: {code}. "
+        f"Unsupported language code: {code!a}. "
         "Please use a valid ISO 639-1 code or common language name."
     )
 
