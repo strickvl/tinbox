@@ -32,6 +32,12 @@ def test_language_code_enum():
         ("detect", "auto"),
         ("español", "es"),
         ("русский", "ru"),
+        ("la", "la"),
+        ("lat", "la"),
+        ("Latin", "la"),
+        ("fr\u200b", "fr"),  # Trailing zero-width space from a pasted command
+        ("\u200bfr", "fr"),
+        ("fr\u2060", "fr"),  # Word joiner
     ],
 )
 def test_normalize_language_code_valid(input_code: str, expected: str):
@@ -53,6 +59,12 @@ def test_normalize_language_code_invalid(invalid_code: str):
     """Test normalizing invalid language codes."""
     with pytest.raises(LanguageError):
         normalize_language_code(invalid_code)
+
+
+def test_normalize_language_code_error_shows_hidden_characters():
+    """Characters that survive normalization are visible in the error message."""
+    with pytest.raises(LanguageError, match=r"'f\\u0433'"):
+        normalize_language_code("f\u0433")  # Cyrillic ghe looks like a Latin r
 
 
 @pytest.mark.parametrize(
