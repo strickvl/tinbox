@@ -4,18 +4,18 @@
 
 ## Install the extras you need
 
-Tinbox requires Python 3.12 or later. The translation review workflow requires Tinbox 0.3.0 or newer. Current provider SDKs and TranslateGemma long-file splitting require 0.4.0 or newer. Markdown and other plain-text inputs, and translation-only stdout, require 0.5.0 or newer. Install all extras with:
+Tinbox requires Python 3.12 or later. The translation review workflow requires Tinbox 0.3.0 or newer. Current provider SDKs and TranslateGemma long-file splitting require 0.4.0 or newer. Markdown and other plain-text inputs, and translation-only stdout, require 0.5.0 or newer. Latin language codes require 0.5.1 or newer. Install all extras with:
 
 ```bash
-uv tool install --python 3.13 "tinbox[all]>=0.5.0"
+uv tool install --python 3.13 "tinbox[all]>=0.5.1"
 ```
 
 For a smaller installation, choose one command for your provider and input files:
 
 ```bash
-uv tool install --python 3.13 "tinbox[openai]>=0.5.0"
-uv tool install --python 3.13 "tinbox[anthropic]>=0.5.0"
-uv tool install --python 3.13 "tinbox[openai,pdf]>=0.5.0"
+uv tool install --python 3.13 "tinbox[openai]>=0.5.1"
+uv tool install --python 3.13 "tinbox[anthropic]>=0.5.1"
+uv tool install --python 3.13 "tinbox[openai,pdf]>=0.5.1"
 ```
 
 The `openai` extra supports OpenAI, Gemini, Ollama, and custom OpenAI-compatible endpoints, including oMLX. The `anthropic` extra supports Claude. The `pdf` extra adds `pdf2image`; PDF processing also needs Poppler, described below. DOCX support is included in the base package, and a `docx` extra remains available. A base-only installation does not include either provider SDK.
@@ -29,7 +29,7 @@ uv tool upgrade tinbox
 When changing extras or Python versions, upgrading from 0.1.0, or replacing a GitHub installation, reinstall explicitly:
 
 ```bash
-uv tool install --force --python 3.13 "tinbox[all]>=0.5.0"
+uv tool install --force --python 3.13 "tinbox[all]>=0.5.1"
 tinbox --version
 ```
 
