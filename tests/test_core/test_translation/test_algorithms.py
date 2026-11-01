@@ -17,6 +17,7 @@ from tinbox.core.translation.algorithms import (
 from tinbox.core.translation.checkpoint import CheckpointManager, TranslationState
 from tinbox.core.translation.interface import (
     ModelInterface,
+    ProviderAccessError,
     TranslationError,
     TranslationResponse,
 )
@@ -314,6 +315,38 @@ async def test_translation_with_failed_pages(
     assert result.tokens_used > 0
     assert result.cost > 0
     assert result.time_taken > 0
+
+
+async def test_provider_access_error_skips_remaining_pages(test_config):
+    """A refused API key on page 2 stops the run instead of trying pages 3-5."""
+    content = DocumentContent(
+        pages=[f"Page {n}" for n in range(1, 6)],
+        content_type="text/plain",
+        metadata={},
+    )
+    translator = AsyncMock(spec=ModelInterface)
+
+    async def mock_translate(request):
+        if request.content == "Page 2":
+            raise ProviderAccessError("Translation failed: invalid API key")
+        return TranslationResponse(
+            text=f"Translated {request.content}",
+            tokens_used=10,
+            cost=0.001,
+            time_taken=0,
+        )
+
+    translator.translate = AsyncMock(side_effect=mock_translate)
+
+    result = await translate_page_by_page(content, test_config, translator)
+
+    assert translator.translate.await_count == 2
+    assert result.failed_pages == [2, 3, 4, 5]
+    assert result.page_errors[2] == "Translation failed: invalid API key"
+    assert result.page_errors[5] == "Skipped: Translation failed: invalid API key"
+    assert result.text.startswith("Translated Page 1")
+    for page in range(2, 6):
+        assert f"[TRANSLATION_FAILED: Page {page}]" in result.text
 
 
 async def test_translation_all_pages_fail(

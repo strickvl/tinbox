@@ -17,6 +17,7 @@ from tinbox.core.translation.checkpoint import (
 from tinbox.core.translation.glossary import GlossaryManager
 from tinbox.core.translation.interface import (
     ModelInterface,
+    ProviderAccessError,
     TranslationError,
     TranslationRequest,
     TranslationResponse,
@@ -293,6 +294,23 @@ async def translate_page_by_page(
                     )
                     await checkpoint_manager.save(state)
 
+            except ProviderAccessError as e:
+                error_msg = str(e)
+                failed_pages.append(page_num)
+                page_errors[page_num] = error_msg
+                skipped = [
+                    p
+                    for p in range(page_num + 1, len(content.pages) + 1)
+                    if p not in translated_pages_by_num
+                ]
+                for p in skipped:
+                    failed_pages.append(p)
+                    page_errors[p] = f"Skipped: {error_msg}"
+                logger.error(
+                    f"Stopping at page {page_num}; the provider refused access, "
+                    f"so {len(skipped)} remaining page(s) were skipped: {error_msg}"
+                )
+                break
             except Exception as e:
                 error_msg = str(e)
                 logger.error(f"Failed to translate page {page_num}: {error_msg}")

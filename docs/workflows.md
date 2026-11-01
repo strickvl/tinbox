@@ -115,11 +115,11 @@ tinbox translate document.txt --model "$TINBOX_MODEL" --to en \
 
 After an interruption, rerun the same command. Tinbox automatically loads a matching checkpoint and reuses saved translations. There is no separate CLI resume flag. The default frequency saves after each completed page or chunk; a larger value can repeat more work after interruption.
 
-Keep the input and all translation settings unchanged. Checkpoints check the language pair, provider, algorithm, protocol, and local-model flag, but do not validate input contents, the exact model name, endpoint, chunk settings, or PDF DPI. A changed configuration can therefore reuse unsuitable results.
+Keep the input and all translation settings unchanged. Before resuming, Tinbox compares the checkpoint with the current run: a SHA-256 of the input file, the language pair, provider, model name, algorithm, protocol, local-model flag, and the chunking settings the algorithm uses (`--context-size` and `--split-token` for `context-aware`, window and overlap sizes for `sliding-window`). If anything differs, or the checkpoint was written by Tinbox 0.5.1 or older, it logs a warning naming the mismatch and translates from the beginning, overwriting the old checkpoint. The endpoint, glossary, reasoning effort, and PDF DPI are not compared.
 
-Checkpoint filenames use only the input's stem, such as `document_checkpoint.json`. Separate directories prevent collisions between inputs such as `document.txt` and `document.pdf`. Use a new checkpoint directory to start over.
+Checkpoint filenames use only the input's stem, such as `document_checkpoint.json`. Two inputs with the same stem, such as `document.txt` and `document.pdf`, would take turns overwriting each other's checkpoint, so give each document its own directory. Use a new checkpoint directory to start over.
 
-Tinbox deletes the checkpoint after writing output and any requested glossary. This cleanup also occurs when a page-based translation writes partial results with failed pages. Inspect the output before treating the document as complete.
+Tinbox deletes the checkpoint after writing a complete translation and any requested glossary. When a page-based translation finishes with failed pages, it still writes the output with `TRANSLATION_FAILED` placeholders, but it keeps the checkpoint and exits with code 1. Rerun the same command to retry only the failed pages; completed pages are reused from the checkpoint. Inspect the output before treating the document as complete.
 
 Pair export with `--save-review-input` requires a fresh translation and rejects checkpoint resume. Omit that option for ordinary resume, or use a new checkpoint directory and new review output path to translate again. See [review recovery](translation-review.md#file-handling-and-recovery).
 
@@ -133,7 +133,7 @@ tinbox translate document.txt --model "$TINBOX_MODEL" --to en --dry-run
 
 The estimate uses document-size heuristics and fixed provider-level prices. It does not look up the selected model's current price. Token counts, cost, and time are approximate, and a dry run does not test credentials or model compatibility.
 
-To prompt when the estimate exceeds a threshold and stop when Tinbox's accumulated cost exceeds it:
+To refuse the run when the estimate exceeds a threshold and stop when Tinbox's accumulated cost exceeds it:
 
 ```bash
 tinbox translate document.txt --model "$TINBOX_MODEL" --to en \
@@ -141,7 +141,9 @@ tinbox translate document.txt --model "$TINBOX_MODEL" --to en \
   --output translated.txt
 ```
 
-`--max-cost` is not a billing cap. The initial estimate can trigger a confirmation prompt rather than refuse the run. During translation, Tinbox checks its calculated cost after a completed request, so the threshold can be exceeded. Those calculations use fixed provider-level prices too. `--force` skips confirmation prompts but does not disable the runtime threshold check.
+`--max-cost` is not a billing cap. If the initial estimate already exceeds the threshold, Tinbox refuses to start unless you pass `--force`. During translation, Tinbox checks its calculated cost after a completed request, so the threshold can be exceeded by one request. Those calculations use fixed provider-level prices too. `--force` skips the confirmation prompt and the pre-flight refusal but does not disable the runtime threshold check.
+
+Tinbox asks for confirmation before translating only when the estimate reaches $1.00 on a cloud model or when `--reasoning-effort` is above `minimal`. Short documents and local models start without a prompt. Scripts without a terminal that hit the prompt exit with code 1; pass `--force` there.
 
 Start with the default `--reasoning-effort minimal`. For GPT-6.1 Sol and Claude Sonnet 5.5, this requests `low` effort; other model mappings are listed in the [CLI reference](cli.md#algorithms-and-models). Increase effort only if the model supports it and the result benefits from it. Higher effort can increase time and cost. TranslateGemma rejects non-default reasoning settings.
 

@@ -110,6 +110,11 @@ def main(
     configure_logging(level=log_level, json=json_logs)
 
 
+def _confirmation_available() -> bool:
+    """Return whether a person is there to answer a confirmation prompt."""
+    return sys.stdin.isatty()
+
+
 def display_cost_estimate(estimate, model: ModelType, *, local: bool = False) -> None:
     """Display cost estimate in a rich format."""
     table = Table(title="Cost Estimate", show_header=False)
@@ -412,8 +417,29 @@ def translate(
         if dry_run:
             return
 
-        # Check for warnings and confirm if needed
-        if not force and estimate.warnings and estimate.requires_confirmation:
+        # Refuse up front when the estimate already breaks the budget
+        if (
+            not force
+            and max_cost is not None
+            and estimate.estimated_cost > max_cost
+            and not is_local_model(model_type, local=local_model)
+        ):
+            status_console.print(
+                f"\n[red]Error:[/red] Estimated cost ${estimate.estimated_cost:.2f} "
+                f"exceeds --max-cost ${max_cost:.2f}. Raise --max-cost, translate "
+                "a smaller document, or pass --force to run anyway."
+            )
+            raise typer.Exit(1)
+
+        # Ask before spending real money or running with unreliable estimates
+        if not force and estimate.requires_confirmation:
+            if not _confirmation_available():
+                status_console.print(
+                    "\n[red]Error:[/red] This translation needs confirmation "
+                    "(see the estimate above), but no terminal is attached. "
+                    "Pass --force to proceed without a prompt."
+                )
+                raise typer.Exit(1)
             status_console.print(
                 "\n[yellow]Review the token and cost estimates above before proceeding.[/yellow]"
             )
@@ -516,8 +542,21 @@ def translate(
         if glossary_manager and save_glossary:
             glossary_manager.save_to_file(save_glossary)
 
-        # Clean up checkpoints after successful output
-        if checkpoint_manager:
+        if response.failed_pages:
+            # Keep the checkpoint so a rerun retries only the failed pages
+            failed = ", ".join(map(str, sorted(response.failed_pages)))
+            status_console.print(
+                f"\n[yellow]{len(response.failed_pages)} page(s) failed to "
+                f"translate: {failed}. The output marks them with "
+                "TRANSLATION_FAILED placeholders.[/yellow]"
+            )
+            if checkpoint_manager:
+                status_console.print(
+                    f"[yellow]Checkpoint kept in {escape(str(config.checkpoint_dir))}; "
+                    "rerun the same command to retry only the failed pages.[/yellow]"
+                )
+        elif checkpoint_manager:
+            # Clean up checkpoints after a complete translation
             asyncio.run(checkpoint_manager.cleanup_old_checkpoints(config.input_file))
 
         if save_review_input is not None:
@@ -567,6 +606,11 @@ def translate(
 
             status_console.print("\n", table)
 
+        if response.failed_pages:
+            raise typer.Exit(1)
+
+    except typer.Exit:
+        raise
     except Exception as e:
         logger.exception("Translation failed")
         status_console.print(f"[red]Error: {e!s}[/red]")

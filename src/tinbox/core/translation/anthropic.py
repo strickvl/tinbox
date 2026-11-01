@@ -20,6 +20,7 @@ from tinbox.core.translation._shared import (
     get_model_name,
     parse_translation_response,
     prepare_request,
+    reraise_provider_error,
     validate_image_content,
 )
 from tinbox.core.translation.interface import (
@@ -32,10 +33,21 @@ from tinbox.core.types import ModelType
 from tinbox.utils.logging import get_logger
 
 try:
-    from anthropic import AsyncAnthropic, RateLimitError
+    from anthropic import (
+        AsyncAnthropic,
+        AuthenticationError,
+        PermissionDeniedError,
+        RateLimitError,
+    )
+
+    _ACCESS_ERRORS: tuple[type[Exception], ...] = (
+        AuthenticationError,
+        PermissionDeniedError,
+    )
 except ImportError:
     AsyncAnthropic = None
     RateLimitError = None
+    _ACCESS_ERRORS = ()
 
 logger = get_logger(__name__)
 
@@ -217,9 +229,7 @@ class AnthropicTranslator(ModelInterface):
         try:
             return await client.messages.create(**kwargs)
         except Exception as e:
-            if RateLimitError and isinstance(e, RateLimitError):
-                raise
-            raise TranslationError(f"Translation failed: {e!s}") from e
+            reraise_provider_error(e, RateLimitError, _ACCESS_ERRORS)
 
     async def translate(
         self,

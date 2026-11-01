@@ -10,18 +10,20 @@ from __future__ import annotations
 import io
 import json
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NoReturn
 
 from PIL import Image
 from tenacity import (
+    RetryCallState,
     before_sleep_log,
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
 
 from tinbox.core.translation.interface import (
+    ProviderAccessError,
     TranslationError,
     TranslationRequest,
 )
@@ -51,11 +53,54 @@ def get_model_name(request: TranslationRequest) -> str:
     return model_name
 
 
+_MAX_RETRY_WAIT_SECONDS = 120.0
+_exponential_wait = wait_exponential(multiplier=1, min=4, max=_MAX_RETRY_WAIT_SECONDS)
+
+
+def is_quota_exhausted(error: BaseException) -> bool:
+    """Return True when a rate-limit error means the account has no credit left.
+
+    OpenAI reports this as a 429 with code ``insufficient_quota``; waiting will
+    never make it succeed.
+    """
+    body = getattr(error, "body", None)
+    nested = body.get("error") if isinstance(body, dict) else None
+    markers = [getattr(error, "code", None), getattr(error, "type", None)]
+    for detail in (body, nested):
+        if isinstance(detail, dict):
+            markers += [detail.get("code"), detail.get("type")]
+    return "insufficient_quota" in markers
+
+
+def _retry_after_seconds(error: BaseException | None) -> float | None:
+    """Read a numeric ``retry-after`` header from an SDK error's HTTP response."""
+    headers = getattr(getattr(error, "response", None), "headers", None)
+    if headers is None:
+        return None
+    try:
+        seconds = float(headers.get("retry-after"))
+    except (TypeError, ValueError):
+        return None
+    if seconds < 0:
+        return None
+    return min(seconds, _MAX_RETRY_WAIT_SECONDS)
+
+
+def _wait_before_retry(retry_state: RetryCallState) -> float:
+    error = retry_state.outcome.exception() if retry_state.outcome else None
+    hinted = _retry_after_seconds(error)
+    return hinted if hinted is not None else _exponential_wait(retry_state)
+
+
 def build_retry_decorator(
     rate_limit_error_cls: type[Exception] | None,
     logger_instance: Any,
 ) -> Any:
-    """Build a retry decorator for rate limit handling.
+    """Build a retry decorator for transient rate limit errors.
+
+    Quota-exhausted errors are not retried. A numeric ``retry-after`` header
+    sets the wait (capped at 120 s); otherwise the wait grows exponentially.
+    After the last attempt the original exception is re-raised.
 
     Args:
         rate_limit_error_cls: The rate limit exception class to retry on,
@@ -71,12 +116,41 @@ def build_retry_decorator(
             return fn
 
         return noop
+
+    def is_transient(error: BaseException) -> bool:
+        return isinstance(error, rate_limit_error_cls) and not is_quota_exhausted(error)
+
     return retry(
-        retry=retry_if_exception_type(rate_limit_error_cls),
-        wait=wait_exponential(multiplier=1, min=4, max=120),
+        retry=retry_if_exception(is_transient),
+        wait=_wait_before_retry,
         stop=stop_after_attempt(10),
         before_sleep=before_sleep_log(logger_instance, log_level=20),
+        reraise=True,
     )
+
+
+def reraise_provider_error(
+    error: Exception,
+    rate_limit_error_cls: type[Exception] | None,
+    access_error_classes: tuple[type[Exception], ...],
+) -> NoReturn:
+    """Re-raise an SDK error as the exception the retry and algorithm code expect.
+
+    Authentication, permission, and quota-exhausted errors become
+    ``ProviderAccessError``. Other rate-limit errors pass through unchanged so
+    the retry decorator can retry them. Everything else becomes
+    ``TranslationError``.
+    """
+    is_rate_limit = rate_limit_error_cls is not None and isinstance(
+        error, rate_limit_error_cls
+    )
+    if isinstance(error, access_error_classes) or (
+        is_rate_limit and is_quota_exhausted(error)
+    ):
+        raise ProviderAccessError(f"Translation failed: {error!s}") from error
+    if is_rate_limit:
+        raise error
+    raise TranslationError(f"Translation failed: {error!s}") from error
 
 
 def build_system_instruction(request: TranslationRequest) -> str:
