@@ -1,13 +1,17 @@
 """Tests for the pre-flight cost gates and partial-failure exit of `translate`."""
 
+import json
 from collections.abc import Generator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
+import tinbox.cli as cli
+from tinbox import __version__
 from tinbox.cli import app
 from tinbox.core.cost import CostEstimate
 from tinbox.core.processor import DocumentContent
@@ -271,3 +275,92 @@ def test_invalid_language_exits_cleanly(cli_runner, input_file):
 
     assert result.exit_code == 1
     assert "Translation failed" not in _printed(mock_console)
+
+
+def test_stopped_chunks_exit_nonzero_and_keep_checkpoint(
+    cli_runner, input_file, tmp_path
+):
+    """A context-aware stop writes the paid-for chunks, keeps state and fails."""
+    output = tmp_path / "out.txt"
+    response = TranslationResponse(
+        text="Hola\n\n[TRANSLATION_FAILED: Chunks 3-4 of 4]",
+        tokens_used=10,
+        cost=0.01,
+        time_taken=1,
+        failed_chunks=[3, 4],
+        warnings=["Translation incomplete: chunks 3-4 of 4 not translated."],
+    )
+    manager = MagicMock(spec=CheckpointManager)
+    manager.cleanup_old_checkpoints = AsyncMock()
+    with (
+        _run_patches(response, _estimate(0.03)),
+        patch("tinbox.cli.CheckpointManager", return_value=manager),
+        patch("tinbox.cli.status_console") as mock_console,
+    ):
+        result = cli_runner.invoke(
+            app,
+            [
+                *("translate", str(input_file), "--to", "es"),
+                *("--model", "openai:gpt-4o", "--output", str(output)),
+                *("--checkpoint-dir", str(tmp_path / "checkpoints")),
+            ],
+        )
+
+    assert result.exit_code == 1
+    assert output.read_text().startswith("Hola")
+    manager.cleanup_old_checkpoints.assert_not_called()
+    printed = _printed(mock_console)
+    assert "Translation stopped before chunk 3 of 4" in printed
+    assert "continue from chunk 3" in printed
+
+
+def test_price_in_requires_price_out(cli_runner, input_file):
+    with patch("tinbox.cli.status_console") as mock_console:
+        result = cli_runner.invoke(
+            app,
+            [
+                *("translate", str(input_file), "--to", "es"),
+                *("--model", "openai:my-proxy-model", "--price-in", "1.5"),
+            ],
+        )
+
+    assert result.exit_code == 1
+    assert "must be given together" in _printed(mock_console)
+
+
+def test_custom_prices_and_metadata_reach_estimate_config_and_json(
+    cli_runner, input_file, tmp_path
+):
+    output = tmp_path / "out.json"
+    response = TranslationResponse(
+        text="Hola",
+        tokens_used=15,
+        cost=0.01,
+        time_taken=1,
+        input_tokens=10,
+        output_tokens=5,
+    )
+    with (
+        _run_patches(response, _estimate(0.03)),
+        patch("tinbox.cli.status_console"),
+    ):
+        result = cli_runner.invoke(
+            app,
+            [
+                *("translate", str(input_file), "--to", "es"),
+                *("--model", "openai:my-proxy-model", "--format", "json"),
+                *("--price-in", "1.5", "--price-out", "6", "--output", str(output)),
+            ],
+        )
+        estimate_kwargs = cast(MagicMock, cli.estimate_cost).call_args.kwargs
+        config = cast(MagicMock, cli.translate_document).call_args.kwargs["config"]
+
+    assert result.exit_code == 0, result.output
+    assert estimate_kwargs["model_name"] == "my-proxy-model"
+    assert (estimate_kwargs["price_in"], estimate_kwargs["price_out"]) == (1.5, 6.0)
+    assert (config.price_in, config.price_out) == (1.5, 6.0)
+    metadata = json.loads(output.read_text())["metadata"]
+    assert metadata["model"] == "openai"
+    assert metadata["model_name"] == "my-proxy-model"
+    assert (metadata["input_tokens"], metadata["output_tokens"]) == (10, 5)
+    assert metadata["tinbox_version"] == __version__

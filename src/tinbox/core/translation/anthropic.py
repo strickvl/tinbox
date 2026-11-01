@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from anthropic import AsyncAnthropic as AnthropicClient
 
-from tinbox.core.cost import calculate_usage_cost
 from tinbox.core.translation._shared import (
     build_glossary_instruction,
     build_retry_decorator,
@@ -20,7 +19,9 @@ from tinbox.core.translation._shared import (
     get_model_name,
     parse_translation_response,
     prepare_request,
+    request_cost,
     reraise_provider_error,
+    usage_tokens,
     validate_image_content,
 )
 from tinbox.core.translation.interface import (
@@ -256,34 +257,38 @@ class AnthropicTranslator(ModelInterface):
 
             response = await self._make_completion_request(request, clean_content)
 
-            if not hasattr(response, "content") or not response.content:
-                raise TranslationError("No response from model")
-
-            if hasattr(response, "stop_reason") and response.stop_reason != "end_turn":
-                raise TranslationError(
-                    f"Invalid stop reason from model: {response.stop_reason}, expected 'end_turn'"
-                )
-
-            raw_text = _extract_text_from_response(response.content)
-
-            text, glossary_updates = parse_translation_response(
-                raw_text,
-                glossary_enabled=bool(request.glossary),
+            # The provider bills a reply even when it is rejected below
+            input_tokens, output_tokens = usage_tokens(
+                response, "input_tokens", "output_tokens"
             )
+            cost = request_cost(
+                request, ModelType.ANTHROPIC, input_tokens, output_tokens
+            )
+            try:
+                if not hasattr(response, "content") or not response.content:
+                    raise TranslationError("No response from model")
 
-            input_tokens = 0
-            output_tokens = 0
-            if hasattr(response, "usage") and response.usage:
-                input_tokens = getattr(response.usage, "input_tokens", 0)
-                output_tokens = getattr(response.usage, "output_tokens", 0)
+                if (
+                    hasattr(response, "stop_reason")
+                    and response.stop_reason != "end_turn"
+                ):
+                    raise TranslationError(
+                        f"Invalid stop reason from model: {response.stop_reason}, expected 'end_turn'"
+                    )
+
+                text, glossary_updates = parse_translation_response(
+                    _extract_text_from_response(response.content),
+                    glossary_enabled=bool(request.glossary),
+                )
+            except TranslationError as e:
+                e.cost, e.input_tokens, e.output_tokens = (
+                    cost,
+                    input_tokens,
+                    output_tokens,
+                )
+                raise
 
             tokens = input_tokens + output_tokens
-            cost = calculate_usage_cost(
-                ModelType.ANTHROPIC,
-                input_tokens,
-                output_tokens,
-                local=request.local_model,
-            )
             time_taken = (datetime.now() - start_time).total_seconds()
             final_text = content_prefix + text + content_suffix
             logger.debug("Final text: ", final_text=final_text)
@@ -293,6 +298,8 @@ class AnthropicTranslator(ModelInterface):
                 tokens_used=tokens,
                 cost=cost,
                 time_taken=time_taken,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
                 glossary_updates=glossary_updates,
             )
 

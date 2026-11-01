@@ -45,6 +45,10 @@ The format follows `--format`, not the output filename extension. Create the out
 
 For PDFs, inspect the result for `[TRANSLATION_FAILED: Page N]` markers. A run can write partial results when some pages fail. JSON also records failures in `result.failed_pages`, `result.page_errors`, and `errors`.
 
+With `context-aware` and `sliding-window`, a failed chunk or a `--max-cost` stop ends the run, but Tinbox still writes every chunk translated so far, followed by a `[TRANSLATION_FAILED: Chunks N-M of M]` marker with the reason, and exits with code 1. JSON records the stop in `warnings` and `errors`. If no chunk was translated, the run fails without output as before.
+
+JSON `metadata` records the provider in `model`, plus `model_name`, `input_tokens`, `output_tokens`, and `tinbox_version`.
+
 ## Review a text translation
 
 Save source and translation chunks during a fresh context-aware `.txt` translation, then inspect them in an offline HTML report:
@@ -119,7 +123,7 @@ Keep the input and all translation settings unchanged. Before resuming, Tinbox c
 
 Checkpoint filenames use only the input's stem, such as `document_checkpoint.json`. Two inputs with the same stem, such as `document.txt` and `document.pdf`, would take turns overwriting each other's checkpoint, so give each document its own directory. Use a new checkpoint directory to start over.
 
-Tinbox deletes the checkpoint after writing a complete translation and any requested glossary. When a page-based translation finishes with failed pages, it still writes the output with `TRANSLATION_FAILED` placeholders, but it keeps the checkpoint and exits with code 1. Rerun the same command to retry only the failed pages; completed pages are reused from the checkpoint. Inspect the output before treating the document as complete.
+Tinbox deletes the checkpoint after writing a complete translation and any requested glossary. When a page-based translation finishes with failed pages, it still writes the output with `TRANSLATION_FAILED` placeholders, but it keeps the checkpoint and exits with code 1. Rerun the same command to retry only the failed pages; completed pages are reused from the checkpoint. When a `context-aware` or `sliding-window` run stops early, Tinbox saves the checkpoint at the stopping point, keeps it, and exits with code 1; rerun the same command to continue from the first untranslated chunk. Inspect the output before treating the document as complete.
 
 Pair export with `--save-review-input` requires a fresh translation and rejects checkpoint resume. Omit that option for ordinary resume, or use a new checkpoint directory and new review output path to translate again. See [review recovery](translation-review.md#file-handling-and-recovery).
 
@@ -131,7 +135,14 @@ Preview the plan without making translation requests:
 tinbox translate document.txt --model "$TINBOX_MODEL" --to en --dry-run
 ```
 
-The estimate uses document-size heuristics and fixed provider-level prices. It does not look up the selected model's current price. Token counts, cost, and time are approximate, and a dry run does not test credentials or model compatibility.
+The estimate uses document-size heuristics and each model's list price from the [genai-prices](https://github.com/pydantic/genai-prices) catalog bundled with Tinbox; nothing is fetched at run time. For a model the catalog does not know, such as one behind a custom `openai:` endpoint, the estimate warns `Price for <model> unknown, using <provider> default` and uses a provider default rate. Set the real price in USD per 1M tokens with `--price-in` and `--price-out`:
+
+```bash
+tinbox translate document.txt --model openai:my-proxy-model --to en \
+  --price-in 0.50 --price-out 1.50 --dry-run
+```
+
+Token counts, cost, and time are approximate, and a dry run does not test credentials or model compatibility.
 
 To refuse the run when the estimate exceeds a threshold and stop when Tinbox's accumulated cost exceeds it:
 
@@ -141,7 +152,7 @@ tinbox translate document.txt --model "$TINBOX_MODEL" --to en \
   --output translated.txt
 ```
 
-`--max-cost` is not a billing cap. If the initial estimate already exceeds the threshold, Tinbox refuses to start unless you pass `--force`. During translation, Tinbox checks its calculated cost after a completed request, so the threshold can be exceeded by one request. Those calculations use fixed provider-level prices too. `--force` skips the confirmation prompt and the pre-flight refusal but does not disable the runtime threshold check.
+`--max-cost` is not a billing cap. If the initial estimate already exceeds the threshold, Tinbox refuses to start unless you pass `--force`. During translation, Tinbox checks its calculated cost after a completed request, so the threshold can be exceeded by one request. That cost includes replies the provider bills but Tinbox rejects. When the threshold is exceeded, Tinbox stops sending requests, writes what it has translated with `TRANSLATION_FAILED` markers for the rest, and exits with code 1. `--max-cost 0` is a real threshold that stops after the first request. `--force` skips the confirmation prompt and the pre-flight refusal but does not disable the runtime threshold check.
 
 Tinbox asks for confirmation before translating only when the estimate reaches $1.00 on a cloud model or when `--reasoning-effort` is above `minimal`. Short documents and local models start without a prompt. Scripts without a terminal that hit the prompt exit with code 1; pass `--force` there.
 

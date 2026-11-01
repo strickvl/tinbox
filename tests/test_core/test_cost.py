@@ -48,9 +48,9 @@ def test_only_ollama_uses_local_pricing_by_default(model):
         (ModelType.GEMINI, True, 0.0, 20),
         (ModelType.OLLAMA, False, 0.0, 20),
         (ModelType.OLLAMA, True, 0.0, 20),
-        (ModelType.OPENAI, False, 0.0112875, 30),
-        (ModelType.ANTHROPIC, False, 0.01809, 30),
-        (ModelType.GEMINI, False, 0.0112875, 30),
+        (ModelType.OPENAI, False, 0.01206, 30),
+        (ModelType.ANTHROPIC, False, 0.01206, 30),
+        (ModelType.GEMINI, False, 0.0045225, 30),
     ],
 )
 def test_estimated_and_usage_cost_agree(
@@ -75,10 +75,8 @@ def test_loopback_proxy_keeps_cloud_pricing_by_default(tmp_path, monkeypatch):
 
     estimate = estimate_cost(file_path, ModelType.OPENAI)
 
-    assert estimate.estimated_cost == pytest.approx(0.0112875)
-    assert calculate_usage_cost(ModelType.OPENAI, 1030, 1000) == pytest.approx(
-        0.0112875
-    )
+    assert estimate.estimated_cost == pytest.approx(0.01206)
+    assert calculate_usage_cost(ModelType.OPENAI, 1030, 1000) == pytest.approx(0.01206)
     assert estimate.estimated_time == pytest.approx(1000 / 30)
 
 
@@ -143,7 +141,7 @@ def test_estimate_document_tokens(tmp_path, file_type, content, expected_tokens)
         (
             ModelType.OPENAI,
             100_000,
-            1.12875,  # 100K input tokens + 3% overhead = 103K input, 100K output -> (103 * 0.00125) + (100 * 0.01) = 0.12875 + 1.0 = 1.12875
+            1.206,  # 103K input (3% overhead) at $2/1M + 100K output at $10/1M = 0.206 + 1.0
             [
                 "Large document detected (203,000 tokens). Consider using Ollama for no cost."
             ],
@@ -151,7 +149,7 @@ def test_estimate_document_tokens(tmp_path, file_type, content, expected_tokens)
         (
             ModelType.ANTHROPIC,
             25_000,
-            0.45225,  # 25K input tokens + 3% overhead = 25.75K input, 25K output -> (25.75 * 0.003) + (25 * 0.015) = 0.07725 + 0.375 = 0.45225
+            0.3015,  # 25.75K input (3% overhead) at $2/1M + 25K output at $10/1M = 0.0515 + 0.25
             [],
         ),
         (
@@ -198,7 +196,7 @@ def test_cost_threshold_warning():
             max_cost=max_cost,
         )
         assert any(
-            f"Estimated cost ($1.13) exceeds maximum threshold (${max_cost:.2f})"
+            f"Estimated cost ($1.21) exceeds maximum threshold (${max_cost:.2f})"
             in warning
             for warning in estimate.warnings
         )
@@ -265,9 +263,9 @@ def test_estimate_cost_by_algorithm(
                 expected_input_tokens * 0.03
             )
 
-        # For OpenAI: input $0.00125/1K, output $0.01/1K
-        expected_input_cost = (adjusted_input_tokens / 1000) * 0.00125
-        expected_output_cost = (expected_output_tokens / 1000) * 0.01
+        # OpenAI provider default: input $2/1M, output $10/1M
+        expected_input_cost = adjusted_input_tokens * 2 / 1_000_000
+        expected_output_cost = expected_output_tokens * 10 / 1_000_000
         expected_total_cost = expected_input_cost + expected_output_cost
 
         assert abs(estimate.estimated_cost - expected_total_cost) < 0.001
@@ -512,3 +510,92 @@ def test_cost_estimate_defaults_confirmation_from_threshold():
     assert cheap.requires_confirmation is False
     assert pricey.requires_confirmation is True
     assert forced.requires_confirmation is False
+
+
+@pytest.mark.parametrize(
+    "model,model_name,expected_cost",
+    [
+        # 1030 input and 1000 output tokens at each model's list price per 1M
+        (ModelType.OPENAI, "gpt-6.1-sol", (1030 * 2 + 1000 * 10) / 1e6),
+        (ModelType.ANTHROPIC, "claude-opus-5-5", (1030 * 4 + 1000 * 20) / 1e6),
+        (ModelType.ANTHROPIC, "claude-haiku-5-5", (1030 * 0.1 + 1000 * 0.5) / 1e6),
+        (ModelType.GEMINI, "gemini-3.8-flash", (1030 * 0.75 + 1000 * 3.75) / 1e6),
+    ],
+)
+def test_models_are_priced_individually(tmp_path, model, model_name, expected_cost):
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("a" * 4000)
+
+    estimate = estimate_cost(file_path, model, model_name=model_name)
+
+    assert estimate.estimated_cost == pytest.approx(expected_cost)
+    assert calculate_usage_cost(
+        model, 1030, 1000, model_name=model_name
+    ) == pytest.approx(expected_cost)
+    assert not any("unknown" in warning for warning in estimate.warnings)
+
+
+def test_unknown_model_warns_and_uses_provider_default(tmp_path):
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("a" * 4000)
+
+    estimate = estimate_cost(file_path, ModelType.OPENAI, model_name="my-proxy-model")
+
+    assert estimate.estimated_cost == pytest.approx(0.01206)
+    assert (
+        "Price for my-proxy-model unknown, using openai default "
+        "($2.00 input / $10.00 output per 1M tokens)"
+    ) in estimate.warnings[0]
+
+
+def test_long_prompt_is_billed_at_long_context_rate():
+    """gpt-6.1-sol charges $4/$15 per 1M tokens once a prompt passes 272K tokens."""
+    cost = calculate_usage_cost(
+        ModelType.OPENAI, 300_000, 1000, model_name="gpt-6.1-sol"
+    )
+    assert cost == pytest.approx((300_000 * 4 + 1000 * 15) / 1e6)
+
+
+def test_custom_prices_override_catalog(tmp_path):
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("a" * 4000)
+    expected = (1030 * 1 + 1000 * 3) / 1e6
+
+    estimate = estimate_cost(
+        file_path,
+        ModelType.ANTHROPIC,
+        model_name="claude-opus-5-5",
+        price_in=1.0,
+        price_out=3.0,
+    )
+    usage_cost = calculate_usage_cost(
+        ModelType.ANTHROPIC,
+        1030,
+        1000,
+        model_name="claude-opus-5-5",
+        price_in=1.0,
+        price_out=3.0,
+    )
+
+    assert estimate.estimated_cost == pytest.approx(expected)
+    assert usage_cost == pytest.approx(expected)
+    local_cost = calculate_usage_cost(
+        ModelType.OLLAMA, 1030, 1000, price_in=1.0, price_out=3.0
+    )
+    assert local_cost == 0.0
+
+
+def test_custom_prices_need_both_values():
+    with pytest.raises(ValueError, match="--price-in and --price-out"):
+        calculate_usage_cost(ModelType.OPENAI, 10, 10, price_in=1.0)
+
+
+def test_zero_max_cost_is_a_real_threshold(tmp_path):
+    file_path = tmp_path / "test.txt"
+    file_path.write_text("a" * 4000)
+
+    estimate = estimate_cost(file_path, ModelType.OPENAI, max_cost=0.0)
+
+    assert any(
+        "exceeds maximum threshold ($0.00)" in warning for warning in estimate.warnings
+    )

@@ -34,6 +34,9 @@ class TranslationState:
     time_taken: float
     # Glossary state: mapping term -> translation
     glossary_entries: dict[str, str] = field(default_factory=dict)
+    # Split of token_usage; 0 in checkpoints written before the split was saved
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 @dataclass
@@ -47,6 +50,8 @@ class ResumeResult:
     metadata: dict[str, Any]
     # Glossary state carried on resume
     glossary_entries: dict[str, str] = field(default_factory=dict)
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
 
 
 class CheckpointManager:
@@ -127,6 +132,8 @@ class CheckpointManager:
                 "failed_pages": state.failed_pages,
                 "translated_chunks": state.translated_chunks,
                 "token_usage": state.token_usage,
+                "input_tokens": state.input_tokens,
+                "output_tokens": state.output_tokens,
                 "cost": state.cost,
                 "time_taken": state.time_taken,
                 "glossary_entries": state.glossary_entries,
@@ -225,6 +232,8 @@ class CheckpointManager:
                 cost=data["cost"],
                 time_taken=data["time_taken"],
                 glossary_entries=glossary_entries,
+                input_tokens=data.get("input_tokens", 0),
+                output_tokens=data.get("output_tokens", 0),
             )
 
             self._logger.debug(
@@ -359,6 +368,8 @@ async def resume_from_checkpoint(
         total_cost=checkpoint.cost,
         metadata=metadata,
         glossary_entries=getattr(checkpoint, "glossary_entries", {}),
+        total_input_tokens=checkpoint.input_tokens,
+        total_output_tokens=checkpoint.output_tokens,
     )
 
     logger.info(f"Resumed with {len(translated_items)} completed items")

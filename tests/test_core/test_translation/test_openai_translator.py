@@ -515,3 +515,47 @@ async def test_long_content(translator: OpenAITranslator, mock_openai_client):
     response = await translator.translate(request)
     # Should preserve trailing space from original content
     assert response.text == "Translated text "
+
+
+@pytest.mark.asyncio
+async def test_rejected_reply_reports_billed_cost(
+    translator: OpenAITranslator, mock_openai_client
+):
+    """A reply cut off by the length limit is still billed, so the error carries the cost."""
+    mock_openai_client.chat.completions.parse = AsyncMock(
+        return_value=_mock_openai_response(
+            finish_reason="length", prompt_tokens=1000, completion_tokens=500
+        )
+    )
+    request = TranslationRequest(
+        source_lang="en",
+        target_lang="es",
+        content="Hello!",
+        content_type="text/plain",
+        model=ModelType.OPENAI,
+        model_params={"model_name": "gpt-6.1-sol"},
+    )
+    with pytest.raises(TranslationError, match="Invalid finish reason") as exc_info:
+        await translator.translate(request)
+    # gpt-6.1-sol short-prompt list price: $2 input, $10 output per 1M tokens
+    assert exc_info.value.cost == pytest.approx((1000 * 2 + 500 * 10) / 1_000_000)
+    assert (exc_info.value.input_tokens, exc_info.value.output_tokens) == (1000, 500)
+
+
+@pytest.mark.asyncio
+async def test_custom_prices_and_token_split(
+    translator: OpenAITranslator, mock_openai_client
+):
+    request = TranslationRequest(
+        source_lang="en",
+        target_lang="es",
+        content="Hello!",
+        content_type="text/plain",
+        model=ModelType.OPENAI,
+        model_params={"model_name": "my-proxy-model"},
+        price_in=1.0,
+        price_out=3.0,
+    )
+    response = await translator.translate(request)
+    assert (response.input_tokens, response.output_tokens) == (6, 4)
+    assert response.cost == pytest.approx((6 * 1.0 + 4 * 3.0) / 1_000_000)

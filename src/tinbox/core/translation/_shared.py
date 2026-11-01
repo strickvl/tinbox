@@ -22,12 +22,13 @@ from tenacity import (
     wait_exponential,
 )
 
+from tinbox.core.cost import calculate_usage_cost
 from tinbox.core.translation.interface import (
     ProviderAccessError,
     TranslationError,
     TranslationRequest,
 )
-from tinbox.core.types import GlossaryEntry
+from tinbox.core.types import GlossaryEntry, ModelType
 from tinbox.utils.chunks import extract_whitespace_formatting
 from tinbox.utils.language import LanguageError, validate_language_pair
 from tinbox.utils.logging import get_logger
@@ -51,6 +52,34 @@ def get_model_name(request: TranslationRequest) -> str:
     if not model_name:
         raise TranslationError("No model name provided")
     return model_name
+
+
+def usage_tokens(response: Any, input_field: str, output_field: str) -> tuple[int, int]:
+    """Read (input, output) token counts from an SDK response; missing counts are 0."""
+    usage = getattr(response, "usage", None)
+    counts = [
+        getattr(usage, name, 0) if usage else 0 for name in (input_field, output_field)
+    ]
+    input_tokens, output_tokens = (c if isinstance(c, int) else 0 for c in counts)
+    return input_tokens, output_tokens
+
+
+def request_cost(
+    request: TranslationRequest,
+    model: ModelType,
+    input_tokens: int,
+    output_tokens: int,
+) -> float:
+    """Price one request's usage with the request's model name and custom prices."""
+    return calculate_usage_cost(
+        model,
+        input_tokens,
+        output_tokens,
+        model_name=request.model_params.get("model_name"),
+        local=request.local_model,
+        price_in=request.price_in,
+        price_out=request.price_out,
+    )
 
 
 _MAX_RETRY_WAIT_SECONDS = 120.0

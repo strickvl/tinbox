@@ -3,8 +3,6 @@
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-import pytest
-
 from tinbox.core.processor import DocumentContent
 from tinbox.core.translation.algorithms import (
     translate_context_aware,
@@ -14,7 +12,6 @@ from tinbox.core.translation.algorithms import (
 from tinbox.core.translation.checkpoint import CheckpointManager, TranslationState
 from tinbox.core.translation.interface import (
     ModelInterface,
-    TranslationError,
     TranslationResponse,
 )
 from tinbox.core.types import ModelType, TranslationConfig
@@ -55,19 +52,18 @@ async def test_page_by_page_max_cost_exceeded():
         resume_from_checkpoint=True,
     )
 
-    # Should raise TranslationError when max_cost is exceeded
-    with pytest.raises(TranslationError) as exc_info:
-        await translate_page_by_page(
-            content, config, translator, checkpoint_manager=checkpoint_manager
-        )
+    result = await translate_page_by_page(
+        content, config, translator, checkpoint_manager=checkpoint_manager
+    )
 
-    # Check error message
-    assert "Translation cost" in str(exc_info.value)
-    assert "exceeded maximum cost" in str(exc_info.value)
-    assert "8.00" in str(exc_info.value)
-
-    # Should have translated at least one page before hitting the limit
-    assert translator.translate.call_count >= 1
+    # Page 2 takes the cost to 10.0 > 8.0, so page 3 is skipped, not lost
+    assert translator.translate.call_count == 2
+    assert result.cost == 10.0
+    assert result.failed_pages == [3]
+    assert result.page_errors[3].startswith("Skipped: Translation cost")
+    assert "exceeded maximum cost of $8.00" in result.page_errors[3]
+    assert result.text.startswith("Expensive translation\n\nExpensive translation")
+    assert "[TRANSLATION_FAILED: Page 3]" in result.text
 
 
 async def test_sliding_window_max_cost_exceeded():
@@ -110,19 +106,17 @@ async def test_sliding_window_max_cost_exceeded():
         resume_from_checkpoint=True,
     )
 
-    # Should raise TranslationError when max_cost is exceeded
-    with pytest.raises(TranslationError) as exc_info:
-        await translate_sliding_window(
-            content, config, translator, checkpoint_manager=checkpoint_manager
-        )
+    result = await translate_sliding_window(
+        content, config, translator, checkpoint_manager=checkpoint_manager
+    )
 
-    # Check error message
-    assert "Translation cost" in str(exc_info.value)
-    assert "exceeded maximum cost" in str(exc_info.value)
-    assert "5.00" in str(exc_info.value)
-
-    # Should have translated at least one window before hitting the limit
-    assert translator.translate.call_count >= 1
+    # Window 2 takes the cost to 6.0 > 5.0; the two paid windows are kept
+    assert translator.translate.call_count == 2
+    assert result.cost == 6.0
+    assert result.text.startswith("Expensive translationExpensive translation")
+    assert result.failed_chunks[0] == 3
+    assert f"Chunks 3-{result.failed_chunks[-1]} of" in result.text
+    assert "exceeded maximum cost of $5.00" in result.warnings[0]
 
 
 async def test_context_aware_max_cost_exceeded():
@@ -164,19 +158,17 @@ async def test_context_aware_max_cost_exceeded():
         resume_from_checkpoint=True,
     )
 
-    # Should raise TranslationError when max_cost is exceeded
-    with pytest.raises(TranslationError) as exc_info:
-        await translate_context_aware(
-            content, config, translator, checkpoint_manager=checkpoint_manager
-        )
+    result = await translate_context_aware(
+        content, config, translator, checkpoint_manager=checkpoint_manager
+    )
 
-    # Check error message
-    assert "Translation cost" in str(exc_info.value)
-    assert "exceeded maximum cost" in str(exc_info.value)
-    assert "7.00" in str(exc_info.value)
-
-    # Should have translated at least one chunk before hitting the limit
-    assert translator.translate.call_count >= 1
+    # Chunk 2 takes the cost to 8.0 > 7.0; the two paid chunks are kept
+    assert translator.translate.call_count == 2
+    assert result.cost == 8.0
+    assert result.text.startswith("Expensive translationExpensive translation")
+    assert result.failed_chunks[0] == 3
+    assert "[TRANSLATION_FAILED: Chunk" in result.text
+    assert "exceeded maximum cost of $7.00" in result.warnings[0]
 
 
 async def test_page_by_page_max_cost_exactly_at_limit():
@@ -316,16 +308,12 @@ async def test_max_cost_with_checkpoint_recovery():
         resume_from_checkpoint=True,
     )
 
-    # Should raise TranslationError when max_cost is exceeded including checkpoint cost
-    with pytest.raises(TranslationError) as exc_info:
-        await translate_page_by_page(
-            content, config, translator, checkpoint_manager=checkpoint_manager
-        )
+    # The cap counts the checkpoint's cost, so the run stops after page 2
+    result = await translate_page_by_page(
+        content, config, translator, checkpoint_manager=checkpoint_manager
+    )
 
-    # Check error message
-    assert "Translation cost" in str(exc_info.value)
-    assert "exceeded maximum cost" in str(exc_info.value)
-    assert "6.00" in str(exc_info.value)
-
-    # Should have translated exactly one new page before hitting the limit
     assert translator.translate.call_count == 1
+    assert result.cost == 7.0
+    assert result.failed_pages == [3]
+    assert "exceeded maximum cost of $6.00" in result.page_errors[3]

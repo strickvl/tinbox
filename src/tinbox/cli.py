@@ -22,6 +22,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from tinbox import __version__
 from tinbox.core import (
     FileType,
     ModelType,
@@ -254,7 +255,19 @@ def translate(
     max_cost: float | None = typer.Option(
         None,
         "--max-cost",
-        help="Maximum cost threshold in USD.",
+        help="Maximum cost threshold in USD. 0 allows only the first request.",
+    ),
+    price_in: float | None = typer.Option(
+        None,
+        "--price-in",
+        min=0.0,
+        help="Input price in USD per 1M tokens, for models Tinbox cannot price (use with --price-out).",
+    ),
+    price_out: float | None = typer.Option(
+        None,
+        "--price-out",
+        min=0.0,
+        help="Output price in USD per 1M tokens, for models Tinbox cannot price (use with --price-in).",
     ),
     verbose: bool = typer.Option(
         False,
@@ -317,6 +330,12 @@ def translate(
                 f"Valid options: {', '.join(valid_reasoning_efforts)}"
             )
 
+        if (price_in is None) != (price_out is None):
+            status_console.print(
+                "[red]Error:[/red] --price-in and --price-out must be given together."
+            )
+            raise typer.Exit(1)
+
         # Parse model specification
         model_type, model_name = parse_model_spec(model)
 
@@ -356,6 +375,8 @@ def translate(
             output_file=output_file,
             force=force,
             max_cost=max_cost,
+            price_in=price_in,
+            price_out=price_out,
             verbose=verbose,
             context_size=context_size,
             custom_split_token=custom_split_token,
@@ -407,6 +428,9 @@ def translate(
             use_glossary=use_glossary,
             reasoning_effort=reasoning_effort,
             local=local_model,
+            model_name=model_name,
+            price_in=price_in,
+            price_out=price_out,
         )
 
         # Display cost estimate
@@ -518,6 +542,13 @@ def translate(
             f"Failed to translate page {p}: {response.page_errors.get(p, 'Unknown error')}"
             for p in response.failed_pages
         ]
+        if response.failed_chunks:
+            first, last = response.failed_chunks[0], response.failed_chunks[-1]
+            errors.append(
+                f"Translation stopped before chunk {first} of {last}; "
+                f"chunks {first}-{last} were not translated"
+            )
+        incomplete = bool(response.failed_pages or response.failed_chunks)
 
         # Create translation output with metadata
         output = TranslationOutput(
@@ -528,6 +559,10 @@ def translate(
                 algorithm=config.algorithm,
                 input_file=config.input_file,
                 input_file_type=file_type,
+                model_name=config.model_name,
+                input_tokens=response.input_tokens,
+                output_tokens=response.output_tokens,
+                tinbox_version=__version__,
             ),
             result=result,
             warnings=all_warnings,
@@ -555,11 +590,28 @@ def translate(
                     f"[yellow]Checkpoint kept in {escape(str(config.checkpoint_dir))}; "
                     "rerun the same command to retry only the failed pages.[/yellow]"
                 )
+        elif response.failed_chunks:
+            first, last = response.failed_chunks[0], response.failed_chunks[-1]
+            status_console.print(
+                f"\n[yellow]Translation stopped before chunk {first} of {last}. "
+                "The output keeps the translated chunks and ends with a "
+                "TRANSLATION_FAILED marker.[/yellow]"
+            )
+            if checkpoint_manager:
+                status_console.print(
+                    f"[yellow]Checkpoint kept in {escape(str(config.checkpoint_dir))}; "
+                    f"rerun the same command to continue from chunk {first}.[/yellow]"
+                )
         elif checkpoint_manager:
             # Clean up checkpoints after a complete translation
             asyncio.run(checkpoint_manager.cleanup_old_checkpoints(config.input_file))
 
-        if save_review_input is not None:
+        if save_review_input is not None and incomplete:
+            status_console.print(
+                "[yellow]Review input not saved because the translation is "
+                "incomplete.[/yellow]"
+            )
+        elif save_review_input is not None:
             try:
                 if not response.review_pairs or source_sha256 is None:
                     raise ValueError("Translation did not return review pairs")
@@ -606,7 +658,7 @@ def translate(
 
             status_console.print("\n", table)
 
-        if response.failed_pages:
+        if incomplete:
             raise typer.Exit(1)
 
     except typer.Exit:

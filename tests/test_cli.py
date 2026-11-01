@@ -42,8 +42,8 @@ def mock_cost_estimate():
 
 @pytest.fixture
 def mock_translation_result():
-    """Create a mock translation result."""
-    return TranslationResult(
+    """Create the response translate_document returns."""
+    return TranslationResponse(
         text="Translated text",
         tokens_used=1000,
         cost=0.03,

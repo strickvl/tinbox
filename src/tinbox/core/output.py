@@ -6,7 +6,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from tinbox.core.types import FileType, ModelType, TranslationResult
 from tinbox.utils.logging import get_logger
@@ -32,6 +32,13 @@ class TranslationMetadata(BaseModel):
     input_file: Path
     input_file_type: FileType
     timestamp: datetime = Field(default_factory=datetime.now)
+    # Added in 0.6.0; None values are left out of JSON output
+    model_name: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    tinbox_version: str | None = None
+
+    model_config = ConfigDict(protected_namespaces=())
 
 
 class TranslationOutput(BaseModel):
@@ -136,6 +143,11 @@ class MarkdownOutputHandler:
             f"- Source Language: {output.metadata.source_lang}",
             f"- Target Language: {output.metadata.target_lang}",
             f"- Model: {output.metadata.model.value}",
+            *(
+                [f"- Model Name: {output.metadata.model_name}"]
+                if output.metadata.model_name
+                else []
+            ),
             f"- Algorithm: {output.metadata.algorithm}",
             f"- Input File: {output.metadata.input_file.name}",
             f"- File Type: {output.metadata.input_file_type.value}",
@@ -146,6 +158,15 @@ class MarkdownOutputHandler:
             "```\n",
             "## Statistics",
             f"- Tokens Used: {output.result.tokens_used:,}",
+            *(
+                [
+                    f"- Input / Output Tokens: {output.metadata.input_tokens:,} / "
+                    f"{output.metadata.output_tokens:,}"
+                ]
+                if output.metadata.input_tokens is not None
+                and output.metadata.output_tokens is not None
+                else []
+            ),
             f"- Cost: ${output.result.cost:.4f}",
             f"- Time Taken: {output.result.time_taken:.1f}s\n",
         ]

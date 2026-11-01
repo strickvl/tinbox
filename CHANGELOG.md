@@ -8,6 +8,13 @@
 - Keep the checkpoint and exit with code 1 when a page-based translation finishes with failed pages. The output is still written with `TRANSLATION_FAILED` placeholders, and rerunning the same command retries only the failed pages. Previously the run exited 0 and deleted the checkpoint, so retrying one page meant paying for every page again.
 - Stop retrying requests that cannot succeed. A bad API key, a missing permission, or an OpenAI `insufficient_quota` 429 now fails the page immediately, marks the remaining pages as skipped, and stops sending requests. Previously each page retried for about six minutes. Transient rate limits still retry, now honouring a numeric `retry-after` header (capped at 120 s), and the last failure surfaces the provider's own error instead of a `RetryError` wrapper.
 
+- Price each model by name. Tinbox now uses the [genai-prices](https://github.com/pydantic/genai-prices) catalog bundled with the package, including long-prompt tiers and dated price changes, instead of one September 2025 rate per provider that priced every Anthropic model as Sonnet 4. Unknown model names fall back to a provider default (checked 1 November 2026) and the estimate warns `Price for <model> unknown, using <provider> default`.
+- Add `--price-in` and `--price-out` to `translate`, in USD per 1M tokens, for custom or OpenAI-compatible endpoints. They override the catalog for the estimate, recorded cost, and `--max-cost`.
+- Count replies the provider bills but Tinbox rejects, such as a truncated reply or invalid JSON, toward recorded cost and `--max-cost`. Previously they cost nothing in Tinbox's accounting.
+- Treat `--max-cost 0` as a real threshold. Previously `0` disabled the check.
+- Keep paid-for work when a run stops early. A failed chunk or a `--max-cost` stop in `context-aware` or `sliding-window` now writes the chunks translated so far, ends the output with a `TRANSLATION_FAILED` marker, saves and keeps any checkpoint, and exits with code 1. A `--max-cost` stop in page mode marks the remaining pages as skipped instead of discarding the translated pages. Previously all three raised an error and wrote nothing.
+- Record `model_name`, `input_tokens`, `output_tokens`, and `tinbox_version` in JSON `metadata`. Existing keys are unchanged; `model` still holds the provider.
+
 ## 0.5.1 (2026-10-29)
 
 - Accept Latin as a source or target language: `la`, `lat`, or `latin` (#47).
