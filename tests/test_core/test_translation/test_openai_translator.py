@@ -536,3 +536,38 @@ async def test_custom_prices_and_token_split(
     response = await translator.translate(request)
     assert (response.input_tokens, response.output_tokens) == (6, 4)
     assert response.cost == pytest.approx((6 * 1.0 + 4 * 3.0) / 1_000_000)
+
+
+async def test_falls_back_to_parse_without_private_sdk_helper(monkeypatch):
+    """A future SDK that moves the schema helper must not disable OpenAI support."""
+    import tinbox.core.translation.openai as openai_module
+
+    monkeypatch.setattr(openai_module, "type_to_response_format_param", None)
+    translator = OpenAITranslator()
+    client = MagicMock()
+    message = MagicMock(content='{"translation": "Hola"}')
+    reply = MagicMock(choices=[MagicMock(message=message, finish_reason="stop")])
+    reply.usage = MagicMock(prompt_tokens=10, completion_tokens=5)
+    client.chat.completions.parse = AsyncMock(return_value=reply)
+    client.chat.completions.create = AsyncMock()
+    translator._clients[ModelType.OPENAI] = client
+
+    response = await translator.translate(
+        TranslationRequest(
+            source_lang="en",
+            target_lang="es",
+            content="Hello",
+            content_type="text/plain",
+            model=ModelType.OPENAI,
+            model_params={"model_name": "gpt-4o"},
+        )
+    )
+
+    assert response.text == "Hola"
+    client.chat.completions.create.assert_not_called()
+    call = client.chat.completions.parse.await_args
+    assert call is not None
+    assert (
+        call.kwargs["response_format"]
+        is openai_module.TranslationWithoutGlossaryResponse
+    )
