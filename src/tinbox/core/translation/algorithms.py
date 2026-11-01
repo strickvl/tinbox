@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
 from rich.progress import Progress, TaskID
 
@@ -10,6 +12,7 @@ from tinbox.core.processor import DocumentContent
 from tinbox.core.review import ReviewPair
 from tinbox.core.translation.checkpoint import (
     CheckpointManager,
+    ResumeResult,
     TranslationState,
     resume_from_checkpoint,
 )
@@ -98,70 +101,213 @@ def _stopped_early(
     )
 
 
-async def _save_chunks(
-    checkpoint_manager: CheckpointManager,
-    config: TranslationConfig,
-    algorithm: str,
-    translated: list[str],
-    usage: tuple[int, int, int, float],
-    start_time: datetime,
-    glossary_manager: GlossaryManager | None,
-) -> None:
-    """Save a sliding-window or context-aware checkpoint.
+@dataclass
+class _Run:
+    """The bookkeeping every algorithm shares for one translation run.
 
-    ``usage`` is (total tokens, input tokens, output tokens, cost) so far.
+    It holds the running token and cost totals, builds and sends each request,
+    updates the glossary and progress bar, and writes checkpoints. Each
+    algorithm keeps its own loop, its own rule for what a failed request means,
+    and its own way of assembling the output.
     """
-    tokens, input_tokens, output_tokens, cost = usage
-    await checkpoint_manager.save(
-        TranslationState(
+
+    config: TranslationConfig
+    translator: ModelInterface
+    progress: Progress | None
+    checkpoint_manager: CheckpointManager | None
+    glossary_manager: GlossaryManager | None
+    start_time: datetime = field(default_factory=datetime.now)
+    tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost: float = 0.0
+    # True when the totals or translations changed since the last checkpoint
+    unsaved: bool = False
+    task_id: TaskID | None = None
+
+    def add_task(self, description: str, total: int, **fields: Any) -> None:
+        if self.progress:
+            self.task_id = self.progress.add_task(description, total=total, **fields)
+
+    def resume(self, result: ResumeResult) -> None:
+        """Carry the checkpoint's token and cost totals into this run."""
+        self.tokens, self.cost = result.total_tokens, result.total_cost
+        self.input_tokens = result.total_input_tokens
+        self.output_tokens = result.total_output_tokens
+
+    def restore_glossary(self, result: ResumeResult) -> None:
+        if (
+            self.config.use_glossary
+            and self.glossary_manager
+            and result.glossary_entries
+        ):
+            self.glossary_manager.restore_from_checkpoint(result.glossary_entries)
+
+    def over_cap(self) -> str | None:
+        return _over_cap(self.config, self.cost)
+
+    def request(
+        self, content: str | bytes, *, context: str | None, content_type: str
+    ) -> TranslationRequest:
+        config = self.config
+        return TranslationRequest(
             source_lang=config.source_lang,
             target_lang=config.target_lang,
-            algorithm=algorithm,
-            # Chunked algorithms treat the whole document as one page
+            content=content,
+            context=context,
+            content_type=content_type,
+            model=config.model,
+            translation_protocol=config.translation_protocol,
+            local_model=config.local_model,
+            model_params={"model_name": config.model_name} if config.model_name else {},
+            glossary=self.glossary_manager.get_current_glossary()
+            if config.use_glossary and self.glossary_manager
+            else None,
+            reasoning_effort=config.reasoning_effort,
+            price_in=config.price_in,
+            price_out=config.price_out,
+        )
+
+    def _add_usage(self, cost: float, input_tokens: int, output_tokens: int) -> None:
+        self.cost += cost
+        self.input_tokens += input_tokens
+        self.output_tokens += output_tokens
+
+    async def send(self, request: TranslationRequest) -> TranslationResponse:
+        """Translate one request; a failure adds what the provider billed, then re-raises.
+
+        The caller decides what the failure means, then passes a successful
+        response to ``record``.
+        """
+        try:
+            return await self.translator.translate(request)
+        except Exception as e:
+            cost, input_tokens, output_tokens = _billed(e)
+            self._add_usage(cost, input_tokens, output_tokens)
+            self.tokens += input_tokens + output_tokens
+            self.unsaved = self.unsaved or any((cost, input_tokens, output_tokens))
+            raise
+
+    def record(self, response: TranslationResponse) -> None:
+        """Apply a successful response to the glossary, totals and progress bar."""
+        if response.glossary_updates and self.glossary_manager:
+            self.glossary_manager.update_glossary(response.glossary_updates)
+        self._add_usage(response.cost, response.input_tokens, response.output_tokens)
+        self.tokens += response.tokens_used
+        self.unsaved = True
+        if self.progress and self.task_id is not None:
+            self.progress.update(self.task_id, advance=1, total_cost=self.cost)
+
+    def show_resumed(self, completed: int) -> None:
+        if self.progress and self.task_id is not None:
+            self.progress.update(
+                self.task_id, completed=completed, total_cost=self.cost
+            )
+
+    @property
+    def checkpoints_on(self) -> bool:
+        return bool(self.checkpoint_manager and self.config.checkpoint_dir)
+
+    def checkpoint_due(self, number: int) -> bool:
+        """Whether the 1-based page or chunk ``number`` ends a checkpoint interval."""
+        return self.checkpoints_on and number % self.config.checkpoint_frequency == 0
+
+    async def _save(
+        self,
+        algorithm: str,
+        translated: dict[int, str],
+        *,
+        completed_pages: list[int],
+        failed_pages: list[int],
+    ) -> None:
+        assert self.checkpoint_manager is not None
+        await self.checkpoint_manager.save(
+            TranslationState(
+                source_lang=self.config.source_lang,
+                target_lang=self.config.target_lang,
+                algorithm=algorithm,
+                completed_pages=completed_pages,
+                failed_pages=failed_pages,
+                translated_chunks=translated,
+                token_usage=self.tokens,
+                cost=self.cost,
+                time_taken=(datetime.now() - self.start_time).total_seconds(),
+                glossary_entries=self.glossary_manager.get_current_glossary().entries
+                if self.glossary_manager
+                else {},
+                input_tokens=self.input_tokens,
+                output_tokens=self.output_tokens,
+            )
+        )
+        self.unsaved = False
+
+    async def save_pages(self, translated: dict[int, str], failed: list[int]) -> None:
+        await self._save(
+            "page",
+            translated.copy(),
+            completed_pages=sorted(translated),
+            failed_pages=failed,
+        )
+
+    async def save_chunks(self, algorithm: str, translated: list[str]) -> None:
+        # Chunked algorithms treat the whole document as one page
+        await self._save(
+            algorithm,
+            {j + 1: text for j, text in enumerate(translated)},
             completed_pages=[1],
             failed_pages=[],
-            translated_chunks={j + 1: text for j, text in enumerate(translated)},
-            token_usage=tokens,
-            cost=cost,
-            time_taken=(datetime.now() - start_time).total_seconds(),
-            glossary_entries=glossary_manager.get_current_glossary().entries
-            if glossary_manager
-            else {},
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
         )
-    )
 
-
-async def _save_pages(
-    checkpoint_manager: CheckpointManager,
-    config: TranslationConfig,
-    translated: dict[int, str],
-    failed_pages: list[int],
-    usage: tuple[int, int, int, float],
-    start_time: datetime,
-    glossary_manager: GlossaryManager | None,
-) -> None:
-    """Save a page-mode checkpoint; ``usage`` is as for ``_save_chunks``."""
-    tokens, input_tokens, output_tokens, cost = usage
-    await checkpoint_manager.save(
-        TranslationState(
-            source_lang=config.source_lang,
-            target_lang=config.target_lang,
-            algorithm="page",
-            completed_pages=sorted(translated),
-            failed_pages=failed_pages,
-            translated_chunks=translated.copy(),
-            token_usage=tokens,
-            cost=cost,
-            time_taken=(datetime.now() - start_time).total_seconds(),
-            glossary_entries=glossary_manager.get_current_glossary().entries
-            if glossary_manager
-            else {},
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
+    def response(
+        self,
+        text: str,
+        *,
+        failed_pages: list[int] | None = None,
+        page_errors: dict[int, str] | None = None,
+        failed_chunks: list[int] | None = None,
+        warnings: list[str] | None = None,
+        review_pairs: list[ReviewPair] | None = None,
+    ) -> TranslationResponse:
+        return TranslationResponse(
+            text=text,
+            tokens_used=self.tokens,
+            cost=self.cost,
+            time_taken=(datetime.now() - self.start_time).total_seconds(),
+            input_tokens=self.input_tokens,
+            output_tokens=self.output_tokens,
+            failed_pages=failed_pages or [],
+            page_errors=page_errors or {},
+            failed_chunks=failed_chunks or [],
+            warnings=warnings or [],
+            review_pairs=review_pairs,
         )
-    )
+
+    async def finish_chunks(
+        self,
+        algorithm: str,
+        translated: list[str],
+        total: int,
+        stop_reason: str | None,
+        review_pairs: list[ReviewPair] | None = None,
+    ) -> TranslationResponse:
+        """Assemble a sliding-window or context-aware result.
+
+        A run that stopped early saves its stopping point, so a rerun continues
+        from the next chunk, and returns the partial text with a failure marker
+        and no review pairs, because a review bundle must cover the whole source.
+        """
+        if stop_reason:
+            if self.unsaved and self.checkpoints_on:
+                await self.save_chunks(algorithm, translated)
+            text, failed_chunks, warning = _stopped_early(
+                translated, total, stop_reason
+            )
+            return self.response(text, failed_chunks=failed_chunks, warnings=[warning])
+        # Chunks do not overlap, so their translations join directly
+        warnings = [reason] if (reason := self.over_cap()) else []
+        return self.response(
+            "".join(translated), warnings=warnings, review_pairs=review_pairs
+        )
 
 
 async def translate_document(
@@ -241,27 +387,16 @@ async def translate_page_by_page(
     Raises:
         TranslationError: If translation fails
     """
-    total_tokens = input_total = output_total = 0
-    total_cost = 0.0
+    run = _Run(config, translator, progress, checkpoint_manager, glossary_manager)
     # Use dict to track translations by actual page number (1-indexed)
     translated_pages_by_num: dict[int, str] = {}
-    task_id: TaskID | None = None
-    start_time = datetime.now()
 
     try:
-        # Set up progress tracking
-        if progress:
-            task_id = progress.add_task(
-                "Translating pages...",
-                total=len(content.pages),
-            )
+        run.add_task("Translating pages...", total=len(content.pages))
 
         # Check for checkpoint and resume if available
         resume_result = await resume_from_checkpoint(checkpoint_manager, config)
-        total_tokens = resume_result.total_tokens
-        total_cost = resume_result.total_cost
-        input_total = resume_result.total_input_tokens
-        output_total = resume_result.total_output_tokens
+        run.resume(resume_result)
 
         # Convert resumed list to dict (items are in order starting from page 1)
         # The resume_result.metadata may contain the actual page->translation mapping
@@ -276,35 +411,20 @@ async def translate_page_by_page(
             for i, text in enumerate(resume_result.translated_items, start=1):
                 translated_pages_by_num[i] = text
 
-        if progress and task_id is not None and resume_result.resumed:
-            progress.update(
-                task_id, completed=len(translated_pages_by_num), total_cost=total_cost
-            )
+        if resume_result.resumed:
+            run.show_resumed(len(translated_pages_by_num))
+        run.restore_glossary(resume_result)
 
         # Track failed pages with their error messages
         failed_pages: list[int] = []
         page_errors: dict[int, str] = {}
-        unsaved = False
-
-        # Restore glossary state from checkpoint if enabled
-        if config.use_glossary and glossary_manager and resume_result.glossary_entries:
-            glossary_manager.restore_from_checkpoint(resume_result.glossary_entries)
 
         # If everything already translated via checkpoint, short-circuit
         if len(translated_pages_by_num) == len(content.pages):
-            # Build final text in page order
-            final_text = "\n\n".join(
-                translated_pages_by_num[p]
-                for p in sorted(translated_pages_by_num.keys())
-            )
-            time_taken = (datetime.now() - start_time).total_seconds()
-            return TranslationResponse(
-                text=final_text,
-                tokens_used=total_tokens,
-                cost=total_cost,
-                time_taken=time_taken,
-                input_tokens=input_total,
-                output_tokens=output_total,
+            return run.response(
+                "\n\n".join(
+                    translated_pages_by_num[p] for p in sorted(translated_pages_by_num)
+                )
             )
 
         # Translate pages - iterate by actual page number (1-indexed)
@@ -314,7 +434,7 @@ async def translate_page_by_page(
                 continue
 
             # Checked before sending, so a resumed run already over the cap spends nothing
-            if reason := _over_cap(config, total_cost):
+            if reason := run.over_cap():
                 _skip_remaining_pages(
                     page_num - 1,
                     len(content.pages),
@@ -327,73 +447,21 @@ async def translate_page_by_page(
                 break
 
             try:
-                # Create translation request
-                request = TranslationRequest(
-                    source_lang=config.source_lang,
-                    target_lang=config.target_lang,
-                    content=page,
-                    context=None,  # No context for page-by-page algorithm
-                    content_type=content.content_type,
-                    model=config.model,
-                    translation_protocol=config.translation_protocol,
-                    local_model=config.local_model,
-                    model_params={"model_name": config.model_name}
-                    if config.model_name
-                    else {},
-                    glossary=glossary_manager.get_current_glossary()
-                    if config.use_glossary and glossary_manager
-                    else None,
-                    reasoning_effort=config.reasoning_effort,
-                    price_in=config.price_in,
-                    price_out=config.price_out,
+                # No context for the page-by-page algorithm
+                request = run.request(
+                    page, context=None, content_type=content.content_type
                 )
-
-                # Translate page
-                response = await translator.translate(request)
-
-                # Update glossary if new terms were discovered
-                if response.glossary_updates and glossary_manager:
-                    glossary_manager.update_glossary(response.glossary_updates)
-
+                response = await run.send(request)
+                run.record(response)
                 # Store with actual page number as key
                 translated_pages_by_num[page_num] = response.text
-                total_tokens += response.tokens_used
-                total_cost += response.cost
-                input_total += response.input_tokens
-                output_total += response.output_tokens
-                unsaved = True
-
-                # Update progress
-                if progress and task_id is not None:
-                    progress.update(task_id, advance=1, total_cost=total_cost)
-
-                # Save checkpoint if needed
-                if (
-                    checkpoint_manager
-                    and config.checkpoint_dir
-                    and page_num % config.checkpoint_frequency == 0
-                ):
-                    await _save_pages(
-                        checkpoint_manager,
-                        config,
-                        translated_pages_by_num,
-                        failed_pages,
-                        (total_tokens, input_total, output_total, total_cost),
-                        start_time,
-                        glossary_manager,
-                    )
-                    unsaved = False
+                if run.checkpoint_due(page_num):
+                    await run.save_pages(translated_pages_by_num, failed_pages)
 
             except Exception as e:
                 error_msg = str(e)
-                cost, in_tokens, out_tokens = _billed(e)
-                total_cost += cost
-                total_tokens += in_tokens + out_tokens
-                input_total += in_tokens
-                output_total += out_tokens
                 failed_pages.append(page_num)
                 page_errors[page_num] = error_msg
-                unsaved = unsaved or any((cost, in_tokens, out_tokens))
                 if isinstance(e, ProviderAccessError):
                     skipped = _skip_remaining_pages(
                         page_num,
@@ -422,20 +490,12 @@ async def translate_page_by_page(
 
         # Save the pages the checkpoint frequency skipped, so a rerun retries
         # only the failed pages
-        if failed_pages and unsaved and checkpoint_manager and config.checkpoint_dir:
-            await _save_pages(
-                checkpoint_manager,
-                config,
-                translated_pages_by_num,
-                failed_pages,
-                (total_tokens, input_total, output_total, total_cost),
-                start_time,
-                glossary_manager,
-            )
+        if failed_pages and run.unsaved and run.checkpoints_on:
+            await run.save_pages(translated_pages_by_num, failed_pages)
 
         # Build warnings list
         warnings: list[str] = []
-        if reason := _over_cap(config, total_cost):
+        if reason := run.over_cap():
             warnings.append(reason)
         if failed_pages:
             logger.warning(f"Failed pages: {failed_pages}")
@@ -460,17 +520,8 @@ async def translate_page_by_page(
                 )
                 page_texts.append(placeholder)
 
-        final_text = "\n\n".join(page_texts)
-
-        time_taken = (datetime.now() - start_time).total_seconds()
-
-        return TranslationResponse(
-            text=final_text,
-            tokens_used=total_tokens,
-            cost=total_cost,
-            time_taken=time_taken,
-            input_tokens=input_total,
-            output_tokens=output_total,
+        return run.response(
+            "\n\n".join(page_texts),
             failed_pages=failed_pages,
             page_errors=page_errors,
             warnings=warnings,
@@ -513,9 +564,7 @@ async def translate_sliding_window(
             )
         text_pages.append(page)
 
-    start_time = datetime.now()
-    total_tokens = input_total = output_total = 0
-    total_cost = 0.0
+    run = _Run(config, translator, progress, checkpoint_manager, glossary_manager)
 
     try:
         # Join all pages into single text
@@ -541,146 +590,53 @@ async def translate_sliding_window(
 
         # Check for checkpoint and resume if available
         resume_result = await resume_from_checkpoint(checkpoint_manager, config)
-        total_tokens = resume_result.total_tokens
-        total_cost = resume_result.total_cost
-        input_total = resume_result.total_input_tokens
-        output_total = resume_result.total_output_tokens
-
         translated_windows = resume_result.translated_items
         stop_reason: str | None = None
-        unsaved = False
 
-        # Set up progress tracking
-        if progress:
-            task_id = progress.add_task(
-                "Translating windows...",
-                total=len(windows),
-                completed=len(translated_windows),
-                total_cost=total_cost,
-            )
-
-        # Restore glossary state from checkpoint if enabled
-        if config.use_glossary and glossary_manager and resume_result.glossary_entries:
-            glossary_manager.restore_from_checkpoint(resume_result.glossary_entries)
+        run.resume(resume_result)
+        run.add_task(
+            "Translating windows...",
+            total=len(windows),
+            completed=len(translated_windows),
+            total_cost=run.cost,
+        )
+        run.restore_glossary(resume_result)
 
         # Translate remaining windows
         for i, (preceding_text, window) in enumerate(
             windows[len(translated_windows) :], len(translated_windows)
         ):
             # Checked before sending, so a resumed run already over the cap spends nothing
-            if stop_reason := _over_cap(config, total_cost):
+            if stop_reason := run.over_cap():
                 logger.error(f"Stopping before window {i + 1}: {stop_reason}")
                 break
             logger.debug(f"Translating window {i + 1}: {window}")
-            # Create translation request
-            request = TranslationRequest(
-                source_lang=config.source_lang,
-                target_lang=config.target_lang,
-                content=window,
+            request = run.request(
+                window,
                 context=build_overlap_context(preceding_text),
                 content_type="text/plain",
-                model=config.model,
-                translation_protocol=config.translation_protocol,
-                local_model=config.local_model,
-                model_params={"model_name": config.model_name}
-                if config.model_name
-                else {},
-                glossary=glossary_manager.get_current_glossary()
-                if config.use_glossary and glossary_manager
-                else None,
-                reasoning_effort=config.reasoning_effort,
-                price_in=config.price_in,
-                price_out=config.price_out,
             )
-
-            # Translate window
             try:
-                response = await translator.translate(request)
+                response = await run.send(request)
             except Exception as e:
-                cost, in_tokens, out_tokens = _billed(e)
-                total_cost += cost
-                total_tokens += in_tokens + out_tokens
-                input_total += in_tokens
-                output_total += out_tokens
                 if not translated_windows:
                     raise
                 # Keep the paid-for windows instead of discarding the whole run
                 logger.error(f"Stopping at window {i + 1}: {e!s}")
                 stop_reason = str(e)
-                unsaved = unsaved or any((cost, in_tokens, out_tokens))
                 break
 
-            # Update glossary if new terms were discovered
-            if response.glossary_updates and glossary_manager:
-                glossary_manager.update_glossary(response.glossary_updates)
-
+            run.record(response)
             translated_windows.append(response.text)
-            total_tokens += response.tokens_used
-            total_cost += response.cost
-            input_total += response.input_tokens
-            output_total += response.output_tokens
-            unsaved = True
-
-            # Update progress
-            if progress and task_id is not None:
-                progress.update(task_id, advance=1, total_cost=total_cost)
-
-            # Save checkpoint if needed
-            if (
-                checkpoint_manager
-                and config.checkpoint_dir
-                and (i + 1) % config.checkpoint_frequency == 0
-            ):
+            if run.checkpoint_due(i + 1):
                 logger.debug(f"Saving checkpoint after window {i + 1}")
-                await _save_chunks(
-                    checkpoint_manager,
-                    config,
-                    "sliding-window",
-                    translated_windows,
-                    (total_tokens, input_total, output_total, total_cost),
-                    start_time,
-                    glossary_manager,
-                )
-                unsaved = False
+                await run.save_chunks("sliding-window", translated_windows)
 
-        # Save the stopping point so a rerun continues from the next window
-        if stop_reason and unsaved and checkpoint_manager and config.checkpoint_dir:
-            await _save_chunks(
-                checkpoint_manager,
-                config,
-                "sliding-window",
-                translated_windows,
-                (total_tokens, input_total, output_total, total_cost),
-                start_time,
-                glossary_manager,
-            )
-
-        warnings: list[str] = []
-        failed_chunks: list[int] = []
-        if stop_reason:
-            final_text, failed_chunks, warning = _stopped_early(
-                translated_windows, len(windows), stop_reason
-            )
-            warnings.append(warning)
-        else:
-            # Windows do not overlap, so their translations join directly
-            final_text = "".join(translated_windows)
-            if reason := _over_cap(config, total_cost):
-                warnings.append(reason)
-        logger.debug(f"Final merged text: {final_text}")
-
-        time_taken = (datetime.now() - start_time).total_seconds()
-
-        return TranslationResponse(
-            text=final_text,
-            tokens_used=total_tokens,
-            cost=total_cost,
-            time_taken=time_taken,
-            input_tokens=input_total,
-            output_tokens=output_total,
-            failed_chunks=failed_chunks,
-            warnings=warnings,
+        result = await run.finish_chunks(
+            "sliding-window", translated_windows, len(windows), stop_reason
         )
+        logger.debug(f"Final merged text: {result.text}")
+        return result
 
     except Exception as e:
         logger.error(f"Error in sliding window translation: {e!s}")
@@ -718,10 +674,7 @@ async def translate_context_aware(
             )
         text_pages.append(page)
 
-    start_time = datetime.now()
-    total_tokens = input_total = output_total = 0
-    total_cost = 0.0
-    task_id: TaskID | None = None
+    run = _Run(config, translator, progress, checkpoint_manager, glossary_manager)
 
     try:
         # Join all pages into single text
@@ -757,14 +710,9 @@ async def translate_context_aware(
                 "Review pair preservation requires a fresh translation. "
                 "Choose a new checkpoint directory or omit --checkpoint-dir."
             )
-        total_tokens = resume_result.total_tokens
-        total_cost = resume_result.total_cost
-        input_total = resume_result.total_input_tokens
-        output_total = resume_result.total_output_tokens
 
         translated_chunks = resume_result.translated_items
         stop_reason: str | None = None
-        unsaved = False
         review_pairs: list[ReviewPair] | None = (
             [] if config.preserve_review_pairs else None
         )
@@ -773,24 +721,20 @@ async def translate_context_aware(
             "previous_translation"
         )
 
-        # Set up progress tracking
-        if progress:
-            task_id = progress.add_task(
-                "Translating chunks...",
-                total=len(chunks),
-                completed=len(translated_chunks),
-                total_cost=total_cost,
-            )
-
-        # Restore glossary state from checkpoint if enabled
-        if config.use_glossary and glossary_manager and resume_result.glossary_entries:
-            glossary_manager.restore_from_checkpoint(resume_result.glossary_entries)
+        run.resume(resume_result)
+        run.add_task(
+            "Translating chunks...",
+            total=len(chunks),
+            completed=len(translated_chunks),
+            total_cost=run.cost,
+        )
+        run.restore_glossary(resume_result)
 
         # Translate remaining chunks with context
         for i, current_chunk in enumerate(
             chunks[len(translated_chunks) :], len(translated_chunks)
         ):
-            if stop_reason := _over_cap(config, total_cost):
+            if stop_reason := run.over_cap():
                 logger.error(f"Stopping before chunk {i + 1}: {stop_reason}")
                 break
             logger.debug(f"Translating chunk {i + 1}/{len(chunks)}")
@@ -811,48 +755,21 @@ async def translate_context_aware(
                 )
             )
 
-            # Create translation request with separate content and context
-            request = TranslationRequest(
-                source_lang=config.source_lang,
-                target_lang=config.target_lang,
-                content=current_chunk,  # Pure content only
-                context=context_info,  # Separate context
-                content_type="text/plain",
-                model=config.model,
-                translation_protocol=config.translation_protocol,
-                local_model=config.local_model,
-                model_params={"model_name": config.model_name}
-                if config.model_name
-                else {},
-                glossary=glossary_manager.get_current_glossary()
-                if config.use_glossary and glossary_manager
-                else None,
-                reasoning_effort=config.reasoning_effort,
-                price_in=config.price_in,
-                price_out=config.price_out,
+            # Content and context travel separately
+            request = run.request(
+                current_chunk, context=context_info, content_type="text/plain"
             )
-
-            # Translate chunk
             try:
-                response = await translator.translate(request)
+                response = await run.send(request)
             except Exception as e:
-                cost, in_tokens, out_tokens = _billed(e)
-                total_cost += cost
-                total_tokens += in_tokens + out_tokens
-                input_total += in_tokens
-                output_total += out_tokens
                 if not translated_chunks:
                     raise
                 # Keep the paid-for chunks instead of discarding the whole run
                 logger.error(f"Stopping at chunk {i + 1}/{len(chunks)}: {e!s}")
                 stop_reason = str(e)
-                unsaved = unsaved or any((cost, in_tokens, out_tokens))
                 break
 
-            # Update glossary if new terms were discovered
-            if response.glossary_updates and glossary_manager:
-                glossary_manager.update_glossary(response.glossary_updates)
-
+            run.record(response)
             translated_chunks.append(response.text)
             if review_pairs is not None:
                 review_pairs.append(
@@ -862,79 +779,23 @@ async def translate_context_aware(
                         translation=response.text,
                     )
                 )
-            total_tokens += response.tokens_used
-            total_cost += response.cost
-            input_total += response.input_tokens
-            output_total += response.output_tokens
-            unsaved = True
-
-            # Update progress
-            if progress and task_id is not None:
-                progress.update(task_id, advance=1, total_cost=total_cost)
-
-            # Save checkpoint if needed
-            if (
-                checkpoint_manager
-                and config.checkpoint_dir
-                and (i + 1) % config.checkpoint_frequency == 0
-            ):
+            if run.checkpoint_due(i + 1):
                 logger.debug(f"Saving checkpoint after chunk {i + 1}")
-                await _save_chunks(
-                    checkpoint_manager,
-                    config,
-                    "context-aware",
-                    translated_chunks,
-                    (total_tokens, input_total, output_total, total_cost),
-                    start_time,
-                    glossary_manager,
-                )
-                unsaved = False
+                await run.save_chunks("context-aware", translated_chunks)
 
             # Update context for next iteration
             previous_chunk = current_chunk
             previous_translation = response.text
 
-        # Save the stopping point so a rerun continues from the next chunk
-        if stop_reason and unsaved and checkpoint_manager and config.checkpoint_dir:
-            await _save_chunks(
-                checkpoint_manager,
-                config,
-                "context-aware",
-                translated_chunks,
-                (total_tokens, input_total, output_total, total_cost),
-                start_time,
-                glossary_manager,
-            )
-
-        warnings: list[str] = []
-        failed_chunks: list[int] = []
-        if stop_reason:
-            final_text, failed_chunks, warning = _stopped_early(
-                translated_chunks, len(chunks), stop_reason
-            )
-            warnings.append(warning)
-            # A review bundle must cover the whole source
-            review_pairs = None
-        else:
-            # Direct concatenation (no complex merging needed)
-            final_text = "".join(translated_chunks)
-            if reason := _over_cap(config, total_cost):
-                warnings.append(reason)
-        logger.info(f"Final translated text length: {len(final_text)} characters")
-
-        time_taken = (datetime.now() - start_time).total_seconds()
-
-        return TranslationResponse(
-            text=final_text,
-            tokens_used=total_tokens,
-            cost=total_cost,
-            time_taken=time_taken,
-            input_tokens=input_total,
-            output_tokens=output_total,
-            failed_chunks=failed_chunks,
-            warnings=warnings,
-            review_pairs=review_pairs,
+        result = await run.finish_chunks(
+            "context-aware",
+            translated_chunks,
+            len(chunks),
+            stop_reason,
+            review_pairs,
         )
+        logger.info(f"Final translated text length: {len(result.text)} characters")
+        return result
 
     except Exception as e:
         logger.error(f"Error in context-aware translation: {e!s}")
