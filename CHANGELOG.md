@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add `--pages` to `translate` for PDFs, such as `--pages 1-3,7`. Only the selected pages are converted, sent and priced in the estimate, always in document order. Failure markers, the failed-page list, and the new `pages` key in JSON `metadata` use the PDF's own page numbers. A checkpoint resumes only with the same selection. A page past the end of the PDF, a malformed range, or `--pages` on a non-PDF file stops the run before the estimate.
+- Read `TINBOX_MODEL`, `TINBOX_FROM`, and `TINBOX_TO` as defaults for `--model`, `--from`, and `--to`. A flag on the command line still wins. Previously the docs used `TINBOX_MODEL` but Tinbox never read it.
+- Show the input, page selection, model, language pair, algorithm, and endpoint in the translation plan. `tinbox doctor` now reports `OPENAI_BASE_URL` and `ANTHROPIC_BASE_URL`. Previously a leftover `OPENAI_BASE_URL`, for example from a local server, silently sent cloud requests to that address.
+
 ## 0.6.0 (2026-11-01)
 
 ### Cost

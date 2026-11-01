@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 from pypdf import PdfWriter
 
-from tinbox.core.processor import DocumentMetadata, ProcessingError
+from tinbox.core.processor import DocumentMetadata, ProcessingError, load_document
 from tinbox.core.processor.pdf import PdfProcessor
 from tinbox.core.types import FileType
 
@@ -218,3 +218,22 @@ async def test_pdf_processor_converts_one_page_at_a_time(tmp_path: Path, monkeyp
         (80, 0, 0),
         (120, 0, 0),
     ]
+
+
+@pytest.mark.asyncio
+@requires_poppler
+async def test_load_document_loads_only_selected_pages(sample_pdf: Path):
+    whole = await load_document(sample_pdf)
+    selected = await load_document(sample_pdf, pages=[2, 3, 5])
+
+    assert selected.page_numbers == [2, 3, 5]
+    assert selected.pages == [whole.pages[1], whole.pages[2], whole.pages[4]]
+    assert whole.page_numbers is None
+
+
+@pytest.mark.asyncio
+async def test_load_document_refuses_page_selection_for_text(tmp_path: Path):
+    text = tmp_path / "doc.txt"
+    text.write_text("Hallo")
+    with pytest.raises(ProcessingError, match="only with PDF files"):
+        await load_document(text, pages=[1])

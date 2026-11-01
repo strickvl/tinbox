@@ -98,7 +98,10 @@ class CheckpointManager:
             "translation_protocol": self.config.translation_protocol.value,
             "local_model": self.config.local_model,
         }
-        if self.config.algorithm == "sliding-window":
+        if self.config.algorithm == "page":
+            # A different --pages selection loads different pages
+            required["pages"] = self.config.pages
+        elif self.config.algorithm == "sliding-window":
             required["sliding_window_split_version"] = SLIDING_WINDOW_SPLIT_VERSION
             required["window_size"] = self.config.window_size
             required["overlap_size"] = self.config.overlap_size
@@ -160,6 +163,7 @@ class CheckpointManager:
                     "overlap_size": self.config.overlap_size,
                     "context_size": self._context_size(),
                     "custom_split_token": self.config.custom_split_token,
+                    "pages": self.config.pages,
                 },
             }
 

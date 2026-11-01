@@ -32,14 +32,17 @@ Global options go before the command:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--model`, `-m` | Required | `PROVIDER:MODEL_ID`; providers are `openai`, `anthropic`, `gemini`, and `ollama` |
-| `--from`, `-f` | Auto-detect | Source language code or accepted alias |
-| `--to`, `-t` | `en` | Target language code or accepted alias |
+| `--model`, `-m` | `TINBOX_MODEL`, else required | `PROVIDER:MODEL_ID`; providers are `openai`, `anthropic`, `gemini`, and `ollama` |
+| `--from`, `-f` | `TINBOX_FROM`, else auto-detect | Source language code or accepted alias |
+| `--to`, `-t` | `TINBOX_TO`, else `en` | Target language code or accepted alias |
+| `--pages` | Every page | PDF pages to translate, such as `1-3,7`; PDFs only |
 | `--output`, `-o` | Terminal | Write the translation or report to this file |
 | `--format`, `-F` | `text` | `text`, `json`, or `markdown`; selected independently of the output filename |
 | `--save-review-input` | None | Write paired source and translation chunks to a new JSON file; requires a fresh context-aware `.txt` translation |
 | `--verbose` | Off | Accepted but currently has no effect; use global `--log-level DEBUG` for diagnostic logs |
 | `--help` | | Show translation help and exit |
+
+A flag on the command line overrides its environment variable. The translation plan names the input, any page selection, the model, the language pair, the algorithm, and the endpoint requests go to, before the cost estimate.
 
 The translation plan, progress, statistics, and errors go to stderr, so stdout carries only the selected output: `tinbox translate notes.md --to de --model MODEL > notes.de.md` writes a clean file, as does `--output`. JSON contains metadata, results, warnings, and errors. Markdown is a report with the translation in a text code block, not a recreation of the source document's formatting.
 

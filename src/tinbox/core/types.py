@@ -135,6 +135,10 @@ class TranslationConfig(BaseModel):
         default=None,
         description="Custom token to split text on (context-aware only, ignores context_size)",
     )
+    pages: list[int] | None = Field(
+        default=None,
+        description="Sorted PDF page numbers to translate; None translates every page",
+    )
     preserve_review_pairs: bool = Field(
         default=False,
         description="Preserve source and translation chunks for a review report",

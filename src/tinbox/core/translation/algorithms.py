@@ -59,16 +59,15 @@ def _over_cap(config: TranslationConfig, total_cost: float) -> str | None:
     )
 
 
-def _skip_remaining_pages(
-    page_num: int,
-    page_count: int,
+def _skip_pages(
+    pages: list[int],
     translated: dict[int, str],
     failed_pages: list[int],
     page_errors: dict[int, str],
     reason: str,
 ) -> int:
-    """Mark untranslated pages after page_num as skipped; return how many."""
-    skipped = [p for p in range(page_num + 1, page_count + 1) if p not in translated]
+    """Mark the untranslated pages among ``pages`` as skipped; return how many."""
+    skipped = [p for p in pages if p not in translated]
     for p in skipped:
         failed_pages.append(p)
         page_errors[p] = f"Skipped: {reason}"
@@ -388,6 +387,8 @@ async def translate_page_by_page(
         TranslationError: If translation fails
     """
     run = _Run(config, translator, progress, checkpoint_manager, glossary_manager)
+    # Real page numbers, which differ from positions when --pages selects some
+    page_numbers = content.page_numbers or list(range(1, len(content.pages) + 1))
     # Use dict to track translations by actual page number (1-indexed)
     translated_pages_by_num: dict[int, str] = {}
 
@@ -407,9 +408,10 @@ async def translate_page_by_page(
                 for k, v in resume_result.metadata["translated_chunks"].items()
             }
         elif resume_result.translated_items:
-            # Fallback: assume sequential from page 1
-            for i, text in enumerate(resume_result.translated_items, start=1):
-                translated_pages_by_num[i] = text
+            # Fallback: assume the items are the first pages in order
+            translated_pages_by_num = dict(
+                zip(page_numbers, resume_result.translated_items, strict=False)
+            )
 
         if resume_result.resumed:
             run.show_resumed(len(translated_pages_by_num))
@@ -427,17 +429,18 @@ async def translate_page_by_page(
                 )
             )
 
-        # Translate pages - iterate by actual page number (1-indexed)
-        for page_num, page in enumerate(content.pages, start=1):
+        # Translate pages, keyed by their real page number
+        for position, (page_num, page) in enumerate(
+            zip(page_numbers, content.pages, strict=True), start=1
+        ):
             # Skip already translated pages
             if page_num in translated_pages_by_num:
                 continue
 
             # Checked before sending, so a resumed run already over the cap spends nothing
             if reason := run.over_cap():
-                _skip_remaining_pages(
-                    page_num - 1,
-                    len(content.pages),
+                _skip_pages(
+                    page_numbers[position - 1 :],
                     translated_pages_by_num,
                     failed_pages,
                     page_errors,
@@ -455,7 +458,7 @@ async def translate_page_by_page(
                 run.record(response)
                 # Store with actual page number as key
                 translated_pages_by_num[page_num] = response.text
-                if run.checkpoint_due(page_num):
+                if run.checkpoint_due(position):
                     await run.save_pages(translated_pages_by_num, failed_pages)
 
             except Exception as e:
@@ -463,9 +466,8 @@ async def translate_page_by_page(
                 failed_pages.append(page_num)
                 page_errors[page_num] = error_msg
                 if isinstance(e, ProviderAccessError):
-                    skipped = _skip_remaining_pages(
-                        page_num,
-                        len(content.pages),
+                    skipped = _skip_pages(
+                        page_numbers[position:],
                         translated_pages_by_num,
                         failed_pages,
                         page_errors,
@@ -506,9 +508,8 @@ async def translate_page_by_page(
 
         # Build final text with placeholders for failed pages
         # This ensures output has content for ALL pages, making failures visible
-        all_page_nums = list(range(1, len(content.pages) + 1))
         page_texts = []
-        for p in all_page_nums:
+        for p in page_numbers:
             if p in translated_pages_by_num:
                 page_texts.append(translated_pages_by_num[p])
             elif p in page_errors:

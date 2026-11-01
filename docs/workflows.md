@@ -6,7 +6,7 @@ Start with the [quick start](../README.md#quick-start) and [provider setup](prov
 export TINBOX_MODEL="openai:gpt-6.1-sol"
 ```
 
-You can substitute a compatible configured `provider:model` value. The filenames below are placeholders for your own documents. Each translation command makes model requests unless it includes `--dry-run`.
+Tinbox reads `TINBOX_MODEL` itself, so `--model "$TINBOX_MODEL"` in the examples is optional. It also reads `TINBOX_FROM` and `TINBOX_TO` as defaults for `--from` and `--to`. A flag on the command line wins over its variable. You can substitute a compatible configured `provider:model` value. The filenames below are placeholders for your own documents. Each translation command makes model requests unless it includes `--dry-run`.
 
 ## Translate a PDF
 
@@ -16,6 +16,15 @@ Install the [PDF prerequisites](providers.md#pdf-requirements) and choose a mode
 tinbox translate document.pdf --model "$TINBOX_MODEL" --from ar --to en \
   --output translated.txt
 ```
+
+To translate only some pages, pass `--pages` with numbers and ranges:
+
+```bash
+tinbox translate document.pdf --model "$TINBOX_MODEL" --from ar --to en \
+  --pages 1-3,7 --output translated.txt
+```
+
+The cost estimate counts only the selected pages, and only those pages are converted and sent, in document order. Failure markers, the failed-page list, and the `pages` key in JSON `metadata` use the PDF's own page numbers, so a failure on the seventh page reads `Page 7`. A checkpoint resumes only with the same `--pages` selection; a different selection starts from the beginning.
 
 The default rasterization resolution is 200 DPI. To change it, add `--pdf-dpi 300`. Higher resolution produces larger images and can increase token use. Check the result on a short document before processing a large one.
 
