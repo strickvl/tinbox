@@ -74,11 +74,13 @@ TranslateGemma requires an `openai:` model, `OPENAI_BASE_URL`, a `.txt` file, an
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--dry-run` | Off | Show approximate tokens, cost, and time without contacting a model or writing a translation |
-| `--max-cost` | None | Refuse to start when the estimate exceeds this USD threshold, and stop when recorded cost exceeds it, checked after a request completes |
+| `--max-cost` | None | Refuse to start a cloud model whose estimate exceeds this USD threshold (local models skip this check), and stop sending requests once recorded cost exceeds it. Cost is checked before each request, so the request that crosses the threshold still completes. `0` refuses any cloud estimate above $0; with `--force`, Tinbox stops after the first request |
+| `--price-in` | None | Input price in USD per 1M tokens for a model Tinbox cannot price, such as a custom `openai:` endpoint. Requires `--price-out` |
+| `--price-out` | None | Output price in USD per 1M tokens. Requires `--price-in` |
 | `--local` | Off | Treat the endpoint as a local model with zero API charges; Ollama is already treated this way |
 | `--force` | Off | Skip the confirmation prompt and the `--max-cost` pre-flight refusal; does not disable validation or the runtime cost threshold |
 
-Tinbox asks for confirmation only when the estimated cost reaches $1.00 on a cloud model, or when `--reasoning-effort` is above `minimal`, so short documents and local models run without a prompt. When confirmation is needed and no terminal is attached, for example in a script or CI job, Tinbox exits with code 1 and asks for `--force` instead of waiting for input. Costs use fixed provider-level rates. A request can exceed `--max-cost` before Tinbox stops, and estimates do not guarantee the provider's bill. `--local` changes accounting only; it does not start a server or select an endpoint. See [cost workflows](workflows.md#preview-and-limit-estimated-cost).
+Tinbox asks for confirmation only when the estimated cost reaches $1.00 on a cloud model, or when `--reasoning-effort` is above `minimal`, so short documents and local models at the default `minimal` effort run without a prompt. When confirmation is needed and no terminal is attached, for example in a script or CI job, Tinbox exits with code 1 and asks for `--force` instead of waiting for input. Tinbox prices each model by name from the bundled [genai-prices](https://github.com/pydantic/genai-prices) catalog, which includes long-prompt tiers and dated price changes. For a model the catalog does not know, Tinbox uses a provider default rate and the estimate warns `Price for <model> unknown, using <provider> default`; pass `--price-in` and `--price-out` to set the real price. Replies the provider bills but Tinbox rejects, for example a truncated reply or invalid JSON, count toward recorded cost. A request can exceed `--max-cost` before Tinbox stops, and estimates do not guarantee the provider's bill. `--local` changes accounting only; it does not start a server or select an endpoint. See [cost workflows](workflows.md#preview-and-limit-estimated-cost).
 
 ### Checkpoints and glossaries
 

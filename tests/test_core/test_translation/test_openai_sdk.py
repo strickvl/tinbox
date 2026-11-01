@@ -9,6 +9,7 @@ from openai import AsyncOpenAI
 
 from tinbox.core.translation.interface import (
     ProviderAccessError,
+    TranslationError,
     TranslationRequest,
 )
 from tinbox.core.translation.openai import OpenAITranslator
@@ -352,3 +353,57 @@ async def test_access_errors_raise_provider_access_error_without_retry(
             )
 
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize(
+    ("finish_reason", "content", "error"),
+    [
+        ("length", '{"translation": "Bonj', "Invalid finish reason from model: length"),
+        ("content_filter", None, "Invalid finish reason from model: content_filter"),
+        ("stop", '{"translation": "Bonj', "Invalid JSON response format"),
+    ],
+)
+@pytest.mark.parametrize("glossary", [None, Glossary()])
+@pytest.mark.asyncio
+async def test_rejected_reply_reports_billed_cost(
+    finish_reason: str, content: str | None, error: str, glossary: Glossary | None
+):
+    """The provider bills a reply Tinbox rejects, so the error carries its cost."""
+    reply = chat_response()
+    reply["choices"][0]["finish_reason"] = finish_reason
+    reply["choices"][0]["message"]["content"] = content
+    reply["usage"] = {
+        "prompt_tokens": 100_000,
+        "completion_tokens": 16_384,
+        "total_tokens": 116_384,
+    }
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=reply)
+
+    async with AsyncOpenAI(
+        api_key="test-key",
+        base_url="http://test.invalid/v1",
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
+    ) as client:
+        translator = OpenAITranslator()
+        translator._clients[ModelType.OPENAI] = client
+        with pytest.raises(TranslationError, match=error) as exc_info:
+            await translator.translate(
+                TranslationRequest(
+                    source_lang="en",
+                    target_lang="fr",
+                    content="Hello",
+                    content_type="text/plain",
+                    model=ModelType.OPENAI,
+                    model_params={"model_name": "gpt-6.1-sol"},
+                    glossary=glossary,
+                )
+            )
+
+    # gpt-6.1-sol short-prompt list price: $2 input, $10 output per 1M tokens
+    assert exc_info.value.cost == pytest.approx((100_000 * 2 + 16_384 * 10) / 1_000_000)
+    assert (exc_info.value.input_tokens, exc_info.value.output_tokens) == (
+        100_000,
+        16_384,
+    )

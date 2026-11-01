@@ -179,3 +179,13 @@ async def test_checkpoint_from_older_tinbox_is_rejected(tmp_path):
 
     assert await manager.load() is None
     assert "older tinbox version" in log.warning.call_args.args[0]
+
+
+@pytest.mark.parametrize(("saved", "current"), [(None, 2000), (2000, None)])
+async def test_omitted_context_size_matches_its_default(tmp_path, saved, current):
+    """The algorithm splits with 2000 when context_size is None, so both match."""
+    await save_checkpoint(make_config(tmp_path, context_size=saved))
+
+    state = await CheckpointManager(make_config(tmp_path, context_size=current)).load()
+
+    assert state is not None

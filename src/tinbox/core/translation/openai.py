@@ -10,12 +10,11 @@ import base64
 import os
 import re
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from openai import AsyncOpenAI as OpenAIClient
 
-from tinbox.core.cost import calculate_usage_cost
 from tinbox.core.translation._shared import (
     build_glossary_instruction,
     build_image_user_content,
@@ -25,7 +24,9 @@ from tinbox.core.translation._shared import (
     get_model_name,
     parse_translation_response,
     prepare_request,
+    request_cost,
     reraise_provider_error,
+    usage_tokens,
     validate_image_content,
 )
 from tinbox.core.translation.interface import (
@@ -57,6 +58,12 @@ except ImportError:
     RateLimitError = None
     _ACCESS_ERRORS = ()
 
+try:
+    # Private SDK helper; if a future SDK moves it, fall back to parse() below
+    from openai.lib._parsing import type_to_response_format_param
+except ImportError:
+    type_to_response_format_param = None
+
 logger = get_logger(__name__)
 
 _GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
@@ -80,6 +87,39 @@ def _check_openai_installed() -> type[OpenAIClient]:
 
 
 completion_with_retry = build_retry_decorator(RateLimitError, logger)
+
+
+def _read_reply(
+    request: TranslationRequest, response: Any
+) -> tuple[str, list[GlossaryEntry]]:
+    """Check a completion and return its text and glossary updates."""
+    if not hasattr(response, "choices") or not response.choices:
+        raise TranslationError("No response from model")
+
+    if (
+        not hasattr(response.choices[0], "finish_reason")
+        or response.choices[0].finish_reason != "stop"
+    ):
+        raise TranslationError(
+            f"Invalid finish reason from model: {response.choices[0].finish_reason}, expected 'stop'"
+        )
+
+    if request.translation_protocol == TranslationProtocol.TRANSLATEGEMMA:
+        text = response.choices[0].text
+        if not text or not text.strip():
+            raise TranslationError("No content returned from model")
+        return text, []
+
+    if (
+        not hasattr(response.choices[0], "message")
+        or not response.choices[0].message.content
+    ):
+        raise TranslationError("Invalid response format: missing message content")
+
+    return parse_translation_response(
+        response.choices[0].message.content,
+        glossary_enabled=bool(request.glossary),
+    )
 
 
 class OpenAITranslator(ModelInterface):
@@ -179,10 +219,19 @@ class OpenAITranslator(ModelInterface):
             "max_tokens": self.max_tokens,
         }
 
-        if request.glossary:
-            kwargs["response_format"] = TranslationWithGlossaryResponse
-        else:
-            kwargs["response_format"] = TranslationWithoutGlossaryResponse
+        # Unlike parse() with a model class, create() with this schema dict returns
+        # truncated or invalid replies instead of raising, so _read_reply rejects
+        # them after their billed usage has been priced
+        response_model = (
+            TranslationWithGlossaryResponse
+            if request.glossary
+            else TranslationWithoutGlossaryResponse
+        )
+        kwargs["response_format"] = (
+            type_to_response_format_param(response_model)
+            if type_to_response_format_param is not None
+            else response_model
+        )
 
         if request.reasoning_effort != "minimal":
             kwargs["reasoning_effort"] = request.reasoning_effort
@@ -205,7 +254,9 @@ class OpenAITranslator(ModelInterface):
                     kwargs.pop(parameter, None)
 
         try:
-            return await client.chat.completions.parse(**kwargs)
+            if type_to_response_format_param is None:
+                return await client.chat.completions.parse(**kwargs)
+            return await client.chat.completions.create(**kwargs)
         except Exception as e:
             reraise_provider_error(e, RateLimitError, _ACCESS_ERRORS)
 
@@ -234,46 +285,22 @@ class OpenAITranslator(ModelInterface):
 
             response = await self._make_completion_request(request, clean_content)
 
-            if not hasattr(response, "choices") or not response.choices:
-                raise TranslationError("No response from model")
-
-            if (
-                not hasattr(response.choices[0], "finish_reason")
-                or response.choices[0].finish_reason != "stop"
-            ):
-                raise TranslationError(
-                    f"Invalid finish reason from model: {response.choices[0].finish_reason}, expected 'stop'"
+            # The provider bills a reply even when it is rejected below
+            input_tokens, output_tokens = usage_tokens(
+                response, "prompt_tokens", "completion_tokens"
+            )
+            cost = request_cost(request, request.model, input_tokens, output_tokens)
+            try:
+                text, glossary_updates = _read_reply(request, response)
+            except TranslationError as e:
+                e.cost, e.input_tokens, e.output_tokens = (
+                    cost,
+                    input_tokens,
+                    output_tokens,
                 )
-
-            if request.translation_protocol == TranslationProtocol.TRANSLATEGEMMA:
-                text = response.choices[0].text
-                if not text or not text.strip():
-                    raise TranslationError("No content returned from model")
-                glossary_updates: list[GlossaryEntry] = []
-            else:
-                if (
-                    not hasattr(response.choices[0], "message")
-                    or not response.choices[0].message.content
-                ):
-                    raise TranslationError(
-                        "Invalid response format: missing message content"
-                    )
-
-                text, glossary_updates = parse_translation_response(
-                    response.choices[0].message.content,
-                    glossary_enabled=bool(request.glossary),
-                )
-
-            input_tokens = 0
-            output_tokens = 0
-            if hasattr(response, "usage") and response.usage:
-                input_tokens = getattr(response.usage, "prompt_tokens", 0)
-                output_tokens = getattr(response.usage, "completion_tokens", 0)
+                raise
 
             tokens = input_tokens + output_tokens
-            cost = calculate_usage_cost(
-                request.model, input_tokens, output_tokens, local=request.local_model
-            )
             time_taken = (datetime.now() - start_time).total_seconds()
             final_text = content_prefix + text + content_suffix
             logger.debug("Final text: ", final_text=final_text)
@@ -283,6 +310,8 @@ class OpenAITranslator(ModelInterface):
                 tokens_used=tokens,
                 cost=cost,
                 time_taken=time_taken,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
                 glossary_updates=glossary_updates,
             )
 

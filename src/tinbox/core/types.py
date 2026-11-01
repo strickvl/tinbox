@@ -62,6 +62,10 @@ class TranslationProtocol(StrEnum):
     TRANSLATEGEMMA = "translategemma"
 
 
+# Context-aware chunk size in characters when context_size is None
+DEFAULT_CONTEXT_SIZE = 2000
+
+
 class TranslationConfig(BaseModel):
     """Configuration for translation tasks."""
 
@@ -98,6 +102,16 @@ class TranslationConfig(BaseModel):
         default=False,
         description="Whether to skip cost and size warnings",
     )
+    price_in: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Custom input price in USD per 1M tokens; set with price_out",
+    )
+    price_out: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Custom output price in USD per 1M tokens; set with price_in",
+    )
 
     # Algorithm-specific settings
     window_size: int = Field(
@@ -113,7 +127,7 @@ class TranslationConfig(BaseModel):
 
     # Context-aware algorithm specific settings
     context_size: int | None = Field(
-        default=2000,
+        default=DEFAULT_CONTEXT_SIZE,
         gt=0,
         description="Target size for context-aware chunks (characters)",
     )
@@ -177,6 +191,12 @@ class TranslationConfig(BaseModel):
                 )
             if self.preserve_review_pairs:
                 raise ValueError("TranslateGemma does not support review pair export")
+        return self
+
+    @model_validator(mode="after")
+    def validate_custom_prices(self) -> Self:
+        if (self.price_in is None) != (self.price_out is None):
+            raise ValueError("--price-in and --price-out must be given together")
         return self
 
     @model_validator(mode="after")

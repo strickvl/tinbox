@@ -405,3 +405,28 @@ async def test_context_handling(translator: AnthropicTranslator, mock_anthropic_
     )
     response = await translator.translate(request)
     assert response.text == "Translated text"
+
+
+@pytest.mark.asyncio
+async def test_invalid_json_reports_billed_cost(
+    translator: AnthropicTranslator, mock_anthropic_client
+):
+    """Anthropic bills a reply even when Tinbox rejects its JSON."""
+    mock_anthropic_client.messages.create = AsyncMock(
+        return_value=_mock_anthropic_response(
+            text="Plain text, not JSON", input_tokens=1000, output_tokens=500
+        )
+    )
+    request = TranslationRequest(
+        source_lang="en",
+        target_lang="es",
+        content="Hello!",
+        content_type="text/plain",
+        model=ModelType.ANTHROPIC,
+        model_params={"model_name": "claude-opus-5-5"},
+    )
+    with pytest.raises(TranslationError, match="Invalid JSON") as exc_info:
+        await translator.translate(request)
+    # claude-opus-5-5 list price: $4 input, $20 output per 1M tokens
+    assert exc_info.value.cost == pytest.approx((1000 * 4 + 500 * 20) / 1_000_000)
+    assert (exc_info.value.input_tokens, exc_info.value.output_tokens) == (1000, 500)

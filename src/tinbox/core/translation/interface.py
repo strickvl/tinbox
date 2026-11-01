@@ -11,9 +11,23 @@ from tinbox.core.types import Glossary, GlossaryEntry, ModelType, TranslationPro
 
 
 class TranslationError(Exception):
-    """Base class for translation-related errors."""
+    """Base class for translation-related errors.
 
-    pass
+    ``cost`` and the token counts record what the provider billed for the failed
+    request, for example a reply rejected for its stop reason or invalid JSON.
+    """
+
+    def __init__(
+        self,
+        *args: object,
+        cost: float = 0.0,
+        input_tokens: int = 0,
+        output_tokens: int = 0,
+    ) -> None:
+        super().__init__(*args)
+        self.cost = cost
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
 
 
 class ProviderAccessError(TranslationError):
@@ -45,6 +59,8 @@ class TranslationRequest(BaseModel):
         default="minimal",
         description="Model reasoning effort level. Provider mapping varies; higher effort may increase time and cost.",
     )
+    price_in: float | None = None  # Custom USD per 1M input tokens
+    price_out: float | None = None  # Custom USD per 1M output tokens
 
     model_config = ConfigDict(frozen=True, protected_namespaces=())
 
@@ -56,6 +72,8 @@ class TranslationResponse(BaseModel):
     tokens_used: int = Field(ge=0)
     cost: float = Field(ge=0.0)
     time_taken: float = Field(ge=0.0)
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
     glossary_updates: list[GlossaryEntry] = Field(
         default_factory=list,
         description="New glossary entries discovered during this translation",
@@ -68,6 +86,10 @@ class TranslationResponse(BaseModel):
     page_errors: dict[int, str] = Field(
         default_factory=dict,
         description="Mapping from page number to error message",
+    )
+    failed_chunks: list[int] = Field(
+        default_factory=list,
+        description="Chunk or window numbers left untranslated after a stop",
     )
     warnings: list[str] = Field(
         default_factory=list,

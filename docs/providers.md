@@ -46,7 +46,7 @@ The model IDs below were checked against official documentation on 22 October 20
 | Gemini | [`gemini-3.8-flash`](https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash) |
 | Ollama | [`gemma4:e2b`](https://ollama.com/library/gemma4/tags) |
 
-The commands below translate an existing `document.txt` into German. Replace that filename with your input path. Add `--dry-run` to estimate the work without calling a model. A successful dry run does not validate credentials, model support, or translation quality. Cost estimates use fixed provider rates, not each model's current price.
+The commands below translate an existing `document.txt` into German. Replace that filename with your input path. Add `--dry-run` to estimate the work without calling a model. A successful dry run does not validate credentials, model support, or translation quality. Cost estimates use each model's list price from the bundled genai-prices catalog, falling back to a provider default with a warning for unknown model names.
 
 ### OpenAI
 
@@ -116,7 +116,7 @@ export OPENAI_API_KEY="local"
 tinbox translate document.txt --to de --model openai:MODEL_ID --local
 ```
 
-`--local` sets estimated and recorded API cost to zero. It does not start a server, redirect requests, or verify where inference runs. Do not use it for a localhost proxy that forwards requests to a paid provider. Without `--local`, custom `openai:` endpoints use Tinbox's approximate OpenAI provider rates, which may differ from the endpoint's actual prices. Token and time estimates are approximate too.
+`--local` sets estimated and recorded API cost to zero. It does not start a server, redirect requests, or verify where inference runs. Do not use it for a localhost proxy that forwards requests to a paid provider. Without `--local`, custom `openai:` endpoints are priced by model name; an unknown name falls back to Tinbox's OpenAI default rate with a warning. Pass `--price-in` and `--price-out` (USD per 1M tokens) to use the endpoint's actual prices. Token and time estimates are approximate too.
 
 ## TranslateGemma with oMLX
 
