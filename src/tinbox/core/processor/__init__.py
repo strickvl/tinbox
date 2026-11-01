@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, Protocol, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from tinbox.core.types import FileType, file_type_for_path
 from tinbox.utils.logging import get_logger
@@ -21,6 +21,8 @@ class DocumentContent(BaseModel):
     pages: list[str | bytes]  # Individual pages for translation
     content_type: str = Field(pattern=r"^(text|image)/.+$")
     metadata: dict[str, Any] = Field(default_factory=dict)
+    # Real page numbers of ``pages`` when only some pages were loaded
+    page_numbers: list[int] | None = None
 
     model_config = ConfigDict(frozen=True)
 
@@ -31,6 +33,12 @@ class DocumentContent(BaseModel):
         if not v:
             raise ValueError("Pages cannot be empty")
         return v
+
+    @model_validator(mode="after")
+    def validate_page_numbers(self) -> DocumentContent:
+        if self.page_numbers is not None and len(self.page_numbers) != len(self.pages):
+            raise ValueError("page_numbers must have one number per page")
+        return self
 
 
 class DocumentMetadata(BaseModel):
@@ -186,16 +194,29 @@ def get_processor_for_file_type(
         raise ProcessingError(f"No processor available for file type: {file_type}")
 
 
+def page_runs(pages: list[int]) -> list[tuple[int, int]]:
+    """Group sorted page numbers into inclusive (first, last) runs: [1, 2, 3, 7] -> [(1, 3), (7, 7)]."""
+    runs: list[tuple[int, int]] = []
+    for page in pages:
+        if runs and page == runs[-1][1] + 1:
+            runs[-1] = (runs[-1][0], page)
+        else:
+            runs.append((page, page))
+    return runs
+
+
 async def load_document(
     file_path: Path,
     *,
     processor_settings: dict[str, Any] | None = None,
+    pages: list[int] | None = None,
 ) -> DocumentContent:
     """Load a document and prepare it for translation.
 
     Args:
         file_path: Path to the document to load
         processor_settings: Optional settings passed to the processor (e.g., {"dpi": 300} for PDFs)
+        pages: Sorted PDF page numbers to load instead of the whole document
 
     Returns:
         Document content ready for translation
@@ -210,18 +231,25 @@ async def load_document(
         # Get metadata first
         metadata = await processor.get_metadata(file_path)
 
-        # Extract all pages
-        pages = []
-        async for page in processor.extract_content(file_path):
-            pages.append(page)
+        if pages is not None and file_type != FileType.PDF:
+            raise ProcessingError("Page selection works only with PDF files")
+
+        # Extract all pages, or each run of selected pages
+        extracted: list[str | bytes] = []
+        for first, last in page_runs(pages) if pages else [(1, None)]:
+            async for page in processor.extract_content(
+                file_path, start_page=first, end_page=last
+            ):
+                extracted.append(page)
 
         # Determine content type based on first page
-        content_type = "image/png" if isinstance(pages[0], bytes) else "text/plain"
+        content_type = "image/png" if isinstance(extracted[0], bytes) else "text/plain"
 
         return DocumentContent(
-            pages=pages,
+            pages=extracted,
             content_type=content_type,
             metadata={"file_type": file_type, **metadata.model_dump()},
+            page_numbers=pages,
         )
 
     except Exception as e:

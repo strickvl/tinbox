@@ -189,3 +189,16 @@ async def test_omitted_context_size_matches_its_default(tmp_path, saved, current
     state = await CheckpointManager(make_config(tmp_path, context_size=current)).load()
 
     assert state is not None
+
+
+async def test_page_checkpoint_does_not_resume_a_different_page_selection(tmp_path):
+    saved = make_config(tmp_path, algorithm="page", pages=[1, 2])
+    await save_checkpoint(saved)
+
+    assert await CheckpointManager(saved).load() is not None
+    for pages in ([1, 2, 3], None):
+        manager, log = load_with_logger(
+            make_config(tmp_path, algorithm="page", pages=pages)
+        )
+        assert await manager.load() is None
+        assert "pages" in log.warning.call_args.kwargs["mismatched"]

@@ -144,11 +144,12 @@ def calculate_usage_cost(
     return (input_tokens * rate_in + output_tokens * rate_out) / 1_000_000
 
 
-def estimate_document_tokens(file_path: Path) -> int:
+def estimate_document_tokens(file_path: Path, *, page_count: int | None = None) -> int:
     """Estimate the number of tokens in a document.
 
     Args:
         file_path: Path to the document
+        page_count: For a PDF, the number of selected pages to price instead of all
 
     Returns:
         Estimated number of tokens
@@ -163,6 +164,8 @@ def estimate_document_tokens(file_path: Path) -> int:
 
     # Read sample of document to estimate tokens
     if file_type == FileType.PDF:
+        if page_count is not None:
+            return page_count * 500
         # For PDFs, estimate based on number of pages
         import pypdf
 
@@ -275,6 +278,7 @@ def estimate_cost(
     model_name: str | None = None,
     price_in: float | None = None,
     price_out: float | None = None,
+    page_count: int | None = None,
 ) -> CostEstimate:
     """Estimate the cost of translating a document.
 
@@ -289,11 +293,12 @@ def estimate_cost(
         model_name: Provider model name used to look up its price
         price_in: Custom input price in USD per 1M tokens (with price_out)
         price_out: Custom output price in USD per 1M tokens (with price_in)
+        page_count: For a PDF, the number of selected pages to price instead of all
 
     Returns:
         CostEstimate object with token count, cost, and warnings
     """
-    estimated_tokens = estimate_document_tokens(file_path)
+    estimated_tokens = estimate_document_tokens(file_path, page_count=page_count)
     local_model = is_local_model(model, local=local)
 
     # Calculate input tokens based on algorithm

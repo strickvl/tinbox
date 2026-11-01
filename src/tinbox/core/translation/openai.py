@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from openai import AsyncOpenAI as OpenAIClient
 
+from tinbox.core.translation import GEMINI_BASE_URL, OLLAMA_BASE_URL
 from tinbox.core.translation._shared import (
     build_glossary_instruction,
     build_image_user_content,
@@ -66,8 +67,6 @@ except ImportError:
 
 logger = get_logger(__name__)
 
-_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
-_OLLAMA_BASE_URL = "http://localhost:11434/v1"
 _GPT6_MINIMAL_EFFORT = {
     "gpt-6.1-sol": "low",
     "gpt-6-astra": "low",
@@ -141,13 +140,13 @@ class OpenAITranslator(ModelInterface):
         if model not in self._clients:
             if model == ModelType.OLLAMA:
                 self._clients[model] = client_class(
-                    base_url=_OLLAMA_BASE_URL,
+                    base_url=OLLAMA_BASE_URL,
                     api_key="ollama",
                 )
             elif model == ModelType.GEMINI:
                 api_key = os.environ.get("GOOGLE_API_KEY", "")
                 self._clients[model] = client_class(
-                    base_url=_GEMINI_BASE_URL,
+                    base_url=GEMINI_BASE_URL,
                     api_key=api_key,
                 )
             else:

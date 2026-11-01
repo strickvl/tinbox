@@ -37,6 +37,8 @@ class TranslationMetadata(BaseModel):
     input_tokens: int | None = None
     output_tokens: int | None = None
     tinbox_version: str | None = None
+    # Added in 0.7.0: the PDF pages selected with --pages
+    pages: list[int] | None = None
 
     model_config = ConfigDict(protected_namespaces=())
 

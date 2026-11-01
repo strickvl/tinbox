@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import os
 import sys
+import unicodedata
 from pathlib import Path
 
 import typer
@@ -38,14 +39,14 @@ from tinbox.core.output import (
     TranslationOutput,
     create_handler,
 )
-from tinbox.core.processor import load_document
+from tinbox.core.processor import load_document, page_runs
 from tinbox.core.progress import CurrentCostColumn, EstimatedCostColumn
 from tinbox.core.review import (
     ReviewBundle,
     save_review_bundle,
     validate_new_output_path,
 )
-from tinbox.core.translation import create_translator
+from tinbox.core.translation import create_translator, provider_endpoint
 from tinbox.core.translation.checkpoint import CheckpointManager
 from tinbox.core.translation.glossary import GlossaryManager
 from tinbox.core.types import TranslationProtocol, file_type_for_path
@@ -133,6 +134,16 @@ def display_cost_estimate(estimate, model: ModelType, *, local: bool = False) ->
             status_console.print(f"• {warning}")
 
 
+def display_plan(rows: list[tuple[str, str]]) -> None:
+    """Show what the run will do: input, pages, model, languages and endpoint."""
+    table = Table(show_header=False)
+    table.add_column("Setting", style="bold blue")
+    table.add_column("Value")
+    for name, value in rows:
+        table.add_row(name, escape(value))
+    status_console.print(table)
+
+
 def parse_model_spec(model_spec: str) -> tuple[ModelType, str]:
     """Parse a model specification string.
 
@@ -145,6 +156,10 @@ def parse_model_spec(model_spec: str) -> tuple[ModelType, str]:
     Raises:
         ValueError: If the model specification is invalid
     """
+    # Drop stray whitespace and invisible characters, e.g. from a .env file
+    model_spec = "".join(
+        ch for ch in model_spec if unicodedata.category(ch) != "Cf"
+    ).strip()
     if ":" not in model_spec:
         raise ValueError(
             "Invalid model specification. Use format 'provider:model' "
@@ -159,6 +174,53 @@ def parse_model_spec(model_spec: str) -> tuple[ModelType, str]:
             f"Unknown model provider: {provider}. "
             f"Supported providers: {', '.join(m.value for m in ModelType)}"
         )
+
+
+def parse_page_selection(spec: str, page_count: int) -> list[int]:
+    """Parse ``--pages``, such as ``1-3,7``, into sorted unique page numbers.
+
+    Raises:
+        ValueError: If a part is not a positive number or an ascending range,
+            or asks for a page past ``page_count``.
+    """
+    pages: set[int] = set()
+    for part in spec.split(","):
+        first, sep, last = part.strip().partition("-")
+        try:
+            start = int(first)
+            end = int(last) if sep else start
+        except ValueError:
+            raise ValueError(
+                f"Invalid --pages value {part.strip()!r}; use numbers and ranges "
+                "such as 1-3,7"
+            ) from None
+        if start < 1 or end < start:
+            raise ValueError(
+                f"Invalid --pages range {part.strip()!r}; pages start at 1 and "
+                "ranges must go up, as in 3-5"
+            )
+        # Checked before expanding, so 1-999999999 cannot build a huge set
+        if end > page_count:
+            raise ValueError(
+                f"--pages asks for page {end}, but the PDF has {page_count} page(s)"
+            )
+        pages.update(range(start, end + 1))
+    return sorted(pages)
+
+
+def format_page_selection(pages: list[int]) -> str:
+    """Write sorted page numbers back as ranges: [1, 2, 3, 7] -> "1-3, 7"."""
+    return ", ".join(
+        str(first) if first == last else f"{first}-{last}"
+        for first, last in page_runs(pages)
+    )
+
+
+def _pdf_page_count(path: Path) -> int:
+    import pypdf
+
+    with open(path, "rb") as f:
+        return len(pypdf.PdfReader(f).pages)
 
 
 @app.command()
@@ -192,18 +254,21 @@ def translate(
         None,
         "--from",
         "-f",
+        envvar="TINBOX_FROM",
         help="Source language code (e.g., 'en', 'zh'). Defaults to auto-detect.",
     ),
     target_lang: str = typer.Option(
         "en",
         "--to",
         "-t",
+        envvar="TINBOX_TO",
         help="Target language code. Defaults to 'en' (English).",
     ),
     model: str = typer.Option(
         ...,
         "--model",
         "-m",
+        envvar="TINBOX_MODEL",
         help="Model to use (e.g., 'openai:gpt-6.1-sol', 'anthropic:claude-sonnet-5-5', 'ollama:gemma4:e2b').",
     ),
     algorithm: str | None = typer.Option(
@@ -301,6 +366,11 @@ def translate(
         "--pdf-dpi",
         help="DPI for PDF rasterization (PDF files only). Higher values = better quality but more tokens. Default: 200.",
     ),
+    pages_spec: str | None = typer.Option(
+        None,
+        "--pages",
+        help="PDF pages to translate, such as 1-3,7. Defaults to every page.",
+    ),
 ) -> None:
     """Translate a document using LLMs."""
     try:
@@ -354,6 +424,19 @@ def translate(
         if effective_algorithm not in ("page", "sliding-window", "context-aware"):
             raise ValueError(f"Invalid translation algorithm '{effective_algorithm}'")
 
+        pages: list[int] | None = None
+        if pages_spec is not None:
+            if file_type != FileType.PDF:
+                status_console.print(
+                    "[red]Error:[/red] --pages works only with PDF files."
+                )
+                raise typer.Exit(1)
+            try:
+                pages = parse_page_selection(pages_spec, _pdf_page_count(input_file))
+            except ValueError as e:
+                status_console.print(f"[red]Error:[/red] {escape(str(e))}")
+                raise typer.Exit(1)
+
         # Loading or saving a glossary only makes sense with the glossary on
         use_glossary = (
             use_glossary or glossary_file is not None or save_glossary is not None
@@ -385,6 +468,7 @@ def translate(
             verbose=verbose,
             context_size=context_size,
             custom_split_token=custom_split_token,
+            pages=pages,
             checkpoint_dir=checkpoint_dir,
             checkpoint_frequency=checkpoint_frequency,
             use_glossary=use_glossary,
@@ -436,10 +520,21 @@ def translate(
             model_name=model_name,
             price_in=price_in,
             price_out=price_out,
+            page_count=len(pages) if pages else None,
         )
 
-        # Display cost estimate
+        # Display the plan and cost estimate
         status_console.print("\n[bold]Translation Plan[/bold]")
+        plan = [
+            ("Input", input_file.name),
+            ("Model", f"{model_type.value}:{model_name}"),
+            ("Languages", f"{effective_source} to {effective_target}"),
+            ("Algorithm", effective_algorithm),
+            ("Endpoint", provider_endpoint(model_type)),
+        ]
+        if pages:
+            plan.insert(1, ("Pages", f"{format_page_selection(pages)} ({len(pages)})"))
+        display_plan(plan)
         display_cost_estimate(estimate, model_type, local=local_model)
 
         # In dry-run mode, exit after showing estimate
@@ -485,7 +580,9 @@ def translate(
         )
         processor_settings = {"dpi": pdf_dpi} if file_type == FileType.PDF else None
         content = asyncio.run(
-            load_document(input_file, processor_settings=processor_settings)
+            load_document(
+                input_file, processor_settings=processor_settings, pages=pages
+            )
         )
 
         # Initialize model interface
@@ -563,6 +660,7 @@ def translate(
                 input_tokens=response.input_tokens,
                 output_tokens=response.output_tokens,
                 tinbox_version=__version__,
+                pages=config.pages,
             ),
             result=result,
             warnings=all_warnings,

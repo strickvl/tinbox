@@ -167,7 +167,7 @@ On Windows, install a Poppler distribution and add its executable directory to `
 tinbox doctor
 ```
 
-The doctor checks installed Python packages, provider SDKs, key presence, `pdfinfo`, and the Ollama executable. It does not authenticate keys, contact model servers, or check whether a model is installed. Missing optional dependencies produce installation hints without failing the command. PDF translation still requires Poppler and `pdf2image` even when the doctor exits successfully.
+The doctor checks installed Python packages, provider SDKs, key presence, `pdfinfo`, and the Ollama executable. It also shows where OpenAI and Anthropic requests go: a leftover `OPENAI_BASE_URL` from a local server sends every `openai:` request there, and the translation plan's Endpoint row shows the same address. It does not authenticate keys, contact model servers, or check whether a model is installed. Missing optional dependencies produce installation hints without failing the command. PDF translation still requires Poppler and `pdf2image` even when the doctor exits successfully.
 
 If translation fails, check the relevant setup:
 

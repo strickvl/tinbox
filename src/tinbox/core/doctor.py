@@ -5,6 +5,11 @@ import shutil
 
 from pydantic import BaseModel, Field
 
+from tinbox.core.translation import (
+    ANTHROPIC_DEFAULT_BASE_URL,
+    OPENAI_DEFAULT_BASE_URL,
+)
+
 
 class DoctorCheck(BaseModel):
     """Result of a single diagnostic check."""
@@ -263,6 +268,29 @@ def check_ollama() -> DoctorCheck:
     )
 
 
+def check_base_url(variable: str, provider: str, default: str) -> DoctorCheck:
+    """Report where an SDK will send requests, since a stale override is silent."""
+    value = os.environ.get(variable)
+    if value is not None and not value.strip():
+        return DoctorCheck(
+            name=variable,
+            category="Endpoints",
+            required=False,
+            ok=False,
+            details=f"Set but empty: {provider} requests will fail to connect",
+            hint=f"Unset it with: unset {variable}",
+        )
+    return DoctorCheck(
+        name=variable,
+        category="Endpoints",
+        required=False,
+        ok=True,
+        details=f"Set: {provider} requests go to {value}"
+        if value is not None
+        else f"Not set: {provider} requests go to {default}",
+    )
+
+
 def run_doctor_checks() -> DoctorReport:
     """Run all diagnostic checks and return a report.
 
@@ -283,6 +311,11 @@ def run_doctor_checks() -> DoctorReport:
         check_openai_key(),
         check_anthropic_key(),
         check_google_key(),
+        # Endpoints
+        check_base_url(
+            "OPENAI_BASE_URL", "OpenAI and TranslateGemma", OPENAI_DEFAULT_BASE_URL
+        ),
+        check_base_url("ANTHROPIC_BASE_URL", "Anthropic", ANTHROPIC_DEFAULT_BASE_URL),
         # Local models
         check_ollama(),
     ]

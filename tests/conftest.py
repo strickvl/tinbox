@@ -6,6 +6,13 @@ from rich.console import Console
 
 
 @pytest.fixture(autouse=True)
+def no_tinbox_env_defaults(monkeypatch):
+    """Keep a developer's TINBOX_* shell defaults out of CLI tests."""
+    for name in ("TINBOX_MODEL", "TINBOX_FROM", "TINBOX_TO"):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def reset_logging_and_console():
     """Reset structlog and Rich Console between tests.
 
