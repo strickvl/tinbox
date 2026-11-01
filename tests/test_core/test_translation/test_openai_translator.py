@@ -571,3 +571,11 @@ async def test_falls_back_to_parse_without_private_sdk_helper(monkeypatch):
         call.kwargs["response_format"]
         is openai_module.TranslationWithoutGlossaryResponse
     )
+
+
+def test_sdk_schema_helper_is_available():
+    """Fails if an SDK upgrade moves the helper, which would silently bring back
+    the `parse()` path that loses billed cost on rejected replies."""
+    import tinbox.core.translation.openai as openai_module
+
+    assert openai_module.type_to_response_format_param is not None
