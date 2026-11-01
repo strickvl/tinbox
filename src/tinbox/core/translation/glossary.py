@@ -113,8 +113,15 @@ class GlossaryManager:
     def restore_from_checkpoint(self, glossary_entries: dict[str, str]) -> None:
         """Restore glossary state from checkpoint entries."""
         if glossary_entries:
-            # The glossary file may have been edited since the checkpoint was saved
-            entries = {**glossary_entries, **self._locked_entries}
+            # The glossary file may have been edited since the checkpoint was saved,
+            # so its entries replace any checkpoint spelling of the same term
+            locked = {_term_key(term) for term in self._locked_entries}
+            unlocked = {
+                term: translation
+                for term, translation in glossary_entries.items()
+                if _term_key(term) not in locked
+            }
+            entries = {**unlocked, **self._locked_entries}
             self.current_glossary = Glossary(entries=entries)
             logger.debug(
                 "Restored glossary from checkpoint",

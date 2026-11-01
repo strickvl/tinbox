@@ -93,7 +93,9 @@ def test_restore_from_checkpoint_keeps_the_file_translations(tmp_path: Path):
     path = _write_glossary(tmp_path / "terms.json", {"entries": {"CPU": "Prozessor"}})
     mgr = GlossaryManager.load_from_file(path)
 
-    mgr.restore_from_checkpoint({"CPU": "Hauptprozessor", "GPU": "Grafikprozessor"})
+    mgr.restore_from_checkpoint(
+        {"CPU": "Hauptprozessor", " cpu": "Rechenwerk", "GPU": "Grafikprozessor"}
+    )
 
     assert mgr.get_current_glossary().entries == {
         "CPU": "Prozessor",
