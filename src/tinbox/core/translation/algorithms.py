@@ -27,7 +27,11 @@ from tinbox.core.translation.splitting import (
     create_windows,
     smart_text_split,
 )
-from tinbox.core.types import TranslationConfig, TranslationProtocol
+from tinbox.core.types import (
+    DEFAULT_CONTEXT_SIZE,
+    TranslationConfig,
+    TranslationProtocol,
+)
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -42,10 +46,13 @@ def _billed(error: Exception) -> tuple[float, int, int]:
     )
 
 
-def _cost_cap_message(total_cost: float, max_cost: float) -> str:
+def _over_cap(config: TranslationConfig, total_cost: float) -> str | None:
+    """Return why the run must stop when recorded cost already exceeds --max-cost."""
+    if config.max_cost is None or total_cost <= config.max_cost:
+        return None
     return (
         f"Translation cost of ${total_cost:.4f} exceeded maximum cost of "
-        f"${max_cost:.2f}"
+        f"${config.max_cost:.2f}"
     )
 
 
@@ -114,6 +121,37 @@ async def _save_chunks(
             completed_pages=[1],
             failed_pages=[],
             translated_chunks={j + 1: text for j, text in enumerate(translated)},
+            token_usage=tokens,
+            cost=cost,
+            time_taken=(datetime.now() - start_time).total_seconds(),
+            glossary_entries=glossary_manager.get_current_glossary().entries
+            if glossary_manager
+            else {},
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+    )
+
+
+async def _save_pages(
+    checkpoint_manager: CheckpointManager,
+    config: TranslationConfig,
+    translated: dict[int, str],
+    failed_pages: list[int],
+    usage: tuple[int, int, int, float],
+    start_time: datetime,
+    glossary_manager: GlossaryManager | None,
+) -> None:
+    """Save a page-mode checkpoint; ``usage`` is as for ``_save_chunks``."""
+    tokens, input_tokens, output_tokens, cost = usage
+    await checkpoint_manager.save(
+        TranslationState(
+            source_lang=config.source_lang,
+            target_lang=config.target_lang,
+            algorithm="page",
+            completed_pages=sorted(translated),
+            failed_pages=failed_pages,
+            translated_chunks=translated.copy(),
             token_usage=tokens,
             cost=cost,
             time_taken=(datetime.now() - start_time).total_seconds(),
@@ -246,6 +284,7 @@ async def translate_page_by_page(
         # Track failed pages with their error messages
         failed_pages: list[int] = []
         page_errors: dict[int, str] = {}
+        unsaved = False
 
         # Restore glossary state from checkpoint if enabled
         if config.use_glossary and glossary_manager and resume_result.glossary_entries:
@@ -273,6 +312,19 @@ async def translate_page_by_page(
             # Skip already translated pages
             if page_num in translated_pages_by_num:
                 continue
+
+            # Checked before sending, so a resumed run already over the cap spends nothing
+            if reason := _over_cap(config, total_cost):
+                _skip_remaining_pages(
+                    page_num - 1,
+                    len(content.pages),
+                    translated_pages_by_num,
+                    failed_pages,
+                    page_errors,
+                    reason,
+                )
+                logger.error(f"Stopping before page {page_num}: {reason}")
+                break
 
             try:
                 # Create translation request
@@ -309,6 +361,7 @@ async def translate_page_by_page(
                 total_cost += response.cost
                 input_total += response.input_tokens
                 output_total += response.output_tokens
+                unsaved = True
 
                 # Update progress
                 if progress and task_id is not None:
@@ -320,23 +373,16 @@ async def translate_page_by_page(
                     and config.checkpoint_dir
                     and page_num % config.checkpoint_frequency == 0
                 ):
-                    state = TranslationState(
-                        source_lang=config.source_lang,
-                        target_lang=config.target_lang,
-                        algorithm="page",
-                        completed_pages=sorted(translated_pages_by_num.keys()),
-                        failed_pages=failed_pages,
-                        translated_chunks=translated_pages_by_num.copy(),
-                        token_usage=total_tokens,
-                        cost=total_cost,
-                        time_taken=(datetime.now() - start_time).total_seconds(),
-                        glossary_entries=glossary_manager.get_current_glossary().entries
-                        if glossary_manager
-                        else {},
-                        input_tokens=input_total,
-                        output_tokens=output_total,
+                    await _save_pages(
+                        checkpoint_manager,
+                        config,
+                        translated_pages_by_num,
+                        failed_pages,
+                        (total_tokens, input_total, output_total, total_cost),
+                        start_time,
+                        glossary_manager,
                     )
-                    await checkpoint_manager.save(state)
+                    unsaved = False
 
             except Exception as e:
                 error_msg = str(e)
@@ -347,6 +393,7 @@ async def translate_page_by_page(
                 output_total += out_tokens
                 failed_pages.append(page_num)
                 page_errors[page_num] = error_msg
+                unsaved = unsaved or any((cost, in_tokens, out_tokens))
                 if isinstance(e, ProviderAccessError):
                     skipped = _skip_remaining_pages(
                         page_num,
@@ -363,19 +410,6 @@ async def translate_page_by_page(
                     break
                 logger.error(f"Failed to translate page {page_num}: {error_msg}")
 
-            if config.max_cost is not None and total_cost > config.max_cost:
-                reason = _cost_cap_message(total_cost, config.max_cost)
-                skipped = _skip_remaining_pages(
-                    page_num,
-                    len(content.pages),
-                    translated_pages_by_num,
-                    failed_pages,
-                    page_errors,
-                    reason,
-                )
-                logger.error(f"Stopping at page {page_num}: {reason}")
-                break
-
         if not translated_pages_by_num:
             if failed_pages:
                 raise TranslationError(
@@ -386,10 +420,23 @@ async def translate_page_by_page(
                     "Translation failed: No pages were successfully translated"
                 )
 
+        # Save the pages the checkpoint frequency skipped, so a rerun retries
+        # only the failed pages
+        if failed_pages and unsaved and checkpoint_manager and config.checkpoint_dir:
+            await _save_pages(
+                checkpoint_manager,
+                config,
+                translated_pages_by_num,
+                failed_pages,
+                (total_tokens, input_total, output_total, total_cost),
+                start_time,
+                glossary_manager,
+            )
+
         # Build warnings list
         warnings: list[str] = []
-        if config.max_cost is not None and total_cost > config.max_cost:
-            warnings.append(_cost_cap_message(total_cost, config.max_cost))
+        if reason := _over_cap(config, total_cost):
+            warnings.append(reason)
         if failed_pages:
             logger.warning(f"Failed pages: {failed_pages}")
             warnings.append(
@@ -430,7 +477,7 @@ async def translate_page_by_page(
         )
 
     except Exception as e:
-        raise TranslationError(f"Translation failed: {e!s}", cost=total_cost) from e
+        raise TranslationError(f"Translation failed: {e!s}") from e
 
 
 async def translate_sliding_window(
@@ -520,6 +567,10 @@ async def translate_sliding_window(
         for i, (preceding_text, window) in enumerate(
             windows[len(translated_windows) :], len(translated_windows)
         ):
+            # Checked before sending, so a resumed run already over the cap spends nothing
+            if stop_reason := _over_cap(config, total_cost):
+                logger.error(f"Stopping before window {i + 1}: {stop_reason}")
+                break
             logger.debug(f"Translating window {i + 1}: {window}")
             # Create translation request
             request = TranslationRequest(
@@ -556,7 +607,7 @@ async def translate_sliding_window(
                 # Keep the paid-for windows instead of discarding the whole run
                 logger.error(f"Stopping at window {i + 1}: {e!s}")
                 stop_reason = str(e)
-                unsaved = unsaved or cost > 0
+                unsaved = unsaved or any((cost, in_tokens, out_tokens))
                 break
 
             # Update glossary if new terms were discovered
@@ -592,15 +643,6 @@ async def translate_sliding_window(
                 )
                 unsaved = False
 
-            if (
-                config.max_cost is not None
-                and total_cost > config.max_cost
-                and i + 1 < len(windows)
-            ):
-                stop_reason = _cost_cap_message(total_cost, config.max_cost)
-                logger.error(f"Stopping after window {i + 1}: {stop_reason}")
-                break
-
         # Save the stopping point so a rerun continues from the next window
         if stop_reason and unsaved and checkpoint_manager and config.checkpoint_dir:
             await _save_chunks(
@@ -623,8 +665,8 @@ async def translate_sliding_window(
         else:
             # Windows do not overlap, so their translations join directly
             final_text = "".join(translated_windows)
-            if config.max_cost is not None and total_cost > config.max_cost:
-                warnings.append(_cost_cap_message(total_cost, config.max_cost))
+            if reason := _over_cap(config, total_cost):
+                warnings.append(reason)
         logger.debug(f"Final merged text: {final_text}")
 
         time_taken = (datetime.now() - start_time).total_seconds()
@@ -642,7 +684,7 @@ async def translate_sliding_window(
 
     except Exception as e:
         logger.error(f"Error in sliding window translation: {e!s}")
-        raise TranslationError(f"Translation failed: {e!s}", cost=total_cost) from e
+        raise TranslationError(f"Translation failed: {e!s}") from e
 
 
 async def translate_context_aware(
@@ -687,7 +729,11 @@ async def translate_context_aware(
         logger.info(f"Combined text length: {len(text)} characters")
 
         # Use configured context size with fallback
-        context_size = config.context_size if config.context_size is not None else 2000
+        context_size = (
+            config.context_size
+            if config.context_size is not None
+            else DEFAULT_CONTEXT_SIZE
+        )
         logger.info(f"Using context size: {context_size} characters")
 
         # Split text using smart splitting
@@ -744,6 +790,9 @@ async def translate_context_aware(
         for i, current_chunk in enumerate(
             chunks[len(translated_chunks) :], len(translated_chunks)
         ):
+            if stop_reason := _over_cap(config, total_cost):
+                logger.error(f"Stopping before chunk {i + 1}: {stop_reason}")
+                break
             logger.debug(f"Translating chunk {i + 1}/{len(chunks)}")
 
             # Get the next chunk if available
@@ -797,7 +846,7 @@ async def translate_context_aware(
                 # Keep the paid-for chunks instead of discarding the whole run
                 logger.error(f"Stopping at chunk {i + 1}/{len(chunks)}: {e!s}")
                 stop_reason = str(e)
-                unsaved = unsaved or cost > 0
+                unsaved = unsaved or any((cost, in_tokens, out_tokens))
                 break
 
             # Update glossary if new terms were discovered
@@ -841,15 +890,6 @@ async def translate_context_aware(
                 )
                 unsaved = False
 
-            if (
-                config.max_cost is not None
-                and total_cost > config.max_cost
-                and i + 1 < len(chunks)
-            ):
-                stop_reason = _cost_cap_message(total_cost, config.max_cost)
-                logger.error(f"Stopping after chunk {i + 1}: {stop_reason}")
-                break
-
             # Update context for next iteration
             previous_chunk = current_chunk
             previous_translation = response.text
@@ -878,8 +918,8 @@ async def translate_context_aware(
         else:
             # Direct concatenation (no complex merging needed)
             final_text = "".join(translated_chunks)
-            if config.max_cost is not None and total_cost > config.max_cost:
-                warnings.append(_cost_cap_message(total_cost, config.max_cost))
+            if reason := _over_cap(config, total_cost):
+                warnings.append(reason)
         logger.info(f"Final translated text length: {len(final_text)} characters")
 
         time_taken = (datetime.now() - start_time).total_seconds()
@@ -898,4 +938,4 @@ async def translate_context_aware(
 
     except Exception as e:
         logger.error(f"Error in context-aware translation: {e!s}")
-        raise TranslationError(f"Translation failed: {e!s}", cost=total_cost) from e
+        raise TranslationError(f"Translation failed: {e!s}") from e

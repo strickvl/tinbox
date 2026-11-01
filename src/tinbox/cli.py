@@ -255,7 +255,9 @@ def translate(
     max_cost: float | None = typer.Option(
         None,
         "--max-cost",
-        help="Maximum cost threshold in USD. 0 allows only the first request.",
+        help="Maximum cost threshold in USD. Tinbox refuses to start a cloud model "
+        "whose estimate exceeds it (unless --force) and stops sending requests once "
+        "recorded cost exceeds it.",
     ),
     price_in: float | None = typer.Option(
         None,
@@ -544,9 +546,12 @@ def translate(
         ]
         if response.failed_chunks:
             first, last = response.failed_chunks[0], response.failed_chunks[-1]
+            untranslated = (
+                f"chunk {first} was" if first == last else f"chunks {first}-{last} were"
+            )
             errors.append(
                 f"Translation stopped before chunk {first} of {last}; "
-                f"chunks {first}-{last} were not translated"
+                f"{untranslated} not translated"
             )
         incomplete = bool(response.failed_pages or response.failed_chunks)
 
@@ -577,6 +582,12 @@ def translate(
         if glossary_manager and save_glossary:
             glossary_manager.save_to_file(save_glossary)
 
+        # Past the cap, a rerun with the same --max-cost stops before any request
+        rerun = (
+            f"rerun with --max-cost above ${response.cost:.4f}, the cost so far, to"
+            if config.max_cost is not None and response.cost > config.max_cost
+            else "rerun the same command to"
+        )
         if response.failed_pages:
             # Keep the checkpoint so a rerun retries only the failed pages
             failed = ", ".join(map(str, sorted(response.failed_pages)))
@@ -588,7 +599,7 @@ def translate(
             if checkpoint_manager:
                 status_console.print(
                     f"[yellow]Checkpoint kept in {escape(str(config.checkpoint_dir))}; "
-                    "rerun the same command to retry only the failed pages.[/yellow]"
+                    f"{rerun} retry only the failed pages.[/yellow]"
                 )
         elif response.failed_chunks:
             first, last = response.failed_chunks[0], response.failed_chunks[-1]
@@ -600,7 +611,7 @@ def translate(
             if checkpoint_manager:
                 status_console.print(
                     f"[yellow]Checkpoint kept in {escape(str(config.checkpoint_dir))}; "
-                    f"rerun the same command to continue from chunk {first}.[/yellow]"
+                    f"{rerun} continue from chunk {first}.[/yellow]"
                 )
         elif checkpoint_manager:
             # Clean up checkpoints after a complete translation

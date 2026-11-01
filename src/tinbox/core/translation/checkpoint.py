@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from tinbox.core.types import TranslationConfig
+from tinbox.core.types import DEFAULT_CONTEXT_SIZE, TranslationConfig
 from tinbox.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,6 +74,12 @@ class CheckpointManager:
                 self._source_sha256 = hashlib.file_digest(f, "sha256").hexdigest()
         return self._source_sha256
 
+    def _context_size(self) -> int:
+        """Return the context size the context-aware algorithm actually uses."""
+        if self.config.context_size is None:
+            return DEFAULT_CONTEXT_SIZE
+        return self.config.context_size
+
     def _required_config(self) -> dict[str, Any]:
         """Settings a checkpoint must match before its chunks can be reused.
 
@@ -96,7 +102,7 @@ class CheckpointManager:
             required["window_size"] = self.config.window_size
             required["overlap_size"] = self.config.overlap_size
         elif self.config.algorithm == "context-aware":
-            required["context_size"] = self.config.context_size
+            required["context_size"] = self._context_size()
             required["custom_split_token"] = self.config.custom_split_token
         return required
 
@@ -151,7 +157,7 @@ class CheckpointManager:
                     "sliding_window_split_version": SLIDING_WINDOW_SPLIT_VERSION,
                     "window_size": self.config.window_size,
                     "overlap_size": self.config.overlap_size,
-                    "context_size": self.config.context_size,
+                    "context_size": self._context_size(),
                     "custom_split_token": self.config.custom_split_token,
                 },
             }

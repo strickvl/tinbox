@@ -7,7 +7,7 @@ import pytest
 
 from tinbox.core.processor import DocumentContent
 from tinbox.core.translation.algorithms import translate_document
-from tinbox.core.translation.checkpoint import CheckpointManager
+from tinbox.core.translation.checkpoint import CheckpointManager, TranslationState
 from tinbox.core.translation.interface import (
     ModelInterface,
     TranslationError,
@@ -145,12 +145,11 @@ async def test_stopped_run_returns_no_review_pairs():
     assert result.review_pairs is None
 
 
-async def test_first_chunk_failure_raises_with_billed_cost():
-    with pytest.raises(TranslationError, match="Translation failed") as exc_info:
+async def test_first_chunk_failure_raises():
+    with pytest.raises(TranslationError, match=REJECTED):
         await translate_document(
             _content("context-aware"), _config("context-aware"), _translator(fail_on=1)
         )
-    assert exc_info.value.cost == pytest.approx(0.5)
 
 
 async def test_failed_page_counts_billed_cost():
@@ -175,3 +174,85 @@ async def test_zero_max_cost_skips_remaining_pages():
         "Skipped: Translation cost of $1.0000 exceeded maximum cost of $0.00"
     )
     assert result.text.startswith("<Aaaa.>\n\n[TRANSLATION_FAILED: Page 2]")
+
+
+def _manager(state: TranslationState | None = None) -> AsyncMock:
+    manager = AsyncMock(spec=CheckpointManager)
+    manager.load.return_value = state
+    return manager
+
+
+@pytest.mark.parametrize("algorithm", ["page", "sliding-window", "context-aware"])
+async def test_resumed_run_over_the_cap_sends_no_request(algorithm):
+    """Rerunning after a --max-cost stop must not spend one more request each time."""
+    manager = _manager(
+        TranslationState(
+            source_lang="en",
+            target_lang="fr",
+            algorithm=algorithm,
+            completed_pages=[1],
+            failed_pages=[],
+            translated_chunks={1: "<Aaaa.>"},
+            token_usage=15,
+            cost=1.0,
+            time_taken=0.1,
+        )
+    )
+    translator = _translator()
+    config = _config(algorithm, max_cost=0.5, checkpoint_dir=Path("checkpoints"))
+
+    result = await translate_document(
+        _content(algorithm), config, translator, checkpoint_manager=manager
+    )
+
+    translator.translate.assert_not_awaited()
+    manager.save.assert_not_awaited()
+    assert result.cost == 1.0
+    reason = "Translation cost of $1.0000 exceeded maximum cost of $0.50"
+    if algorithm == "page":
+        assert result.failed_pages == [2, 3]
+        assert result.page_errors[2] == f"Skipped: {reason}"
+        assert result.text.startswith("<Aaaa.>\n\n[TRANSLATION_FAILED: Page 2]")
+    else:
+        assert result.failed_chunks == [2, 3]
+        assert result.text == (
+            "<Aaaa.>\n\n[TRANSLATION_FAILED: Chunks 2-3 of 3]\n"
+            f"Reason: {reason}\n[/TRANSLATION_FAILED]"
+        )
+
+
+@pytest.mark.parametrize("algorithm", ["sliding-window", "context-aware"])
+async def test_stop_saves_tokens_of_an_unpriced_rejected_reply(algorithm):
+    """A rejected reply with tokens but no price (local, custom $0) still gets saved."""
+    manager = _manager()
+    config = _config(algorithm, checkpoint_dir=Path("checkpoints"))
+
+    await translate_document(
+        _content(algorithm),
+        config,
+        _translator(fail_on=3, billed=0.0),
+        checkpoint_manager=manager,
+    )
+
+    # Saves after chunks 1 and 2, then once more for the rejected reply's tokens
+    assert manager.save.await_count == 3
+    state = manager.save.await_args.args[0]
+    assert (state.input_tokens, state.output_tokens) == (120, 60)
+    assert state.token_usage == 30 + 150
+
+
+async def test_page_mode_saves_unsaved_pages_when_it_finishes_with_failures():
+    """A rerun retries only the failed page, even with a large checkpoint frequency."""
+    manager = _manager()
+    config = _config("page", checkpoint_dir=Path("checkpoints"), checkpoint_frequency=5)
+
+    result = await translate_document(
+        _content("page"), config, _translator(fail_on=2), checkpoint_manager=manager
+    )
+
+    assert result.failed_pages == [2]
+    manager.save.assert_awaited_once()
+    state = manager.save.await_args.args[0]
+    assert state.translated_chunks == {1: "<Aaaa.>", 3: "<Cccc.>"}
+    assert state.failed_pages == [2]
+    assert state.cost == pytest.approx(2.5)

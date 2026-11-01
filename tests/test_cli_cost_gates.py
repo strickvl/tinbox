@@ -314,6 +314,46 @@ def test_stopped_chunks_exit_nonzero_and_keep_checkpoint(
     assert "continue from chunk 3" in printed
 
 
+@pytest.mark.parametrize(
+    "stop",
+    [
+        {"failed_chunks": [5]},
+        {"failed_pages": [2], "page_errors": {2: "Skipped: Translation cost"}},
+    ],
+)
+def test_cost_stop_says_to_raise_max_cost(cli_runner, input_file, tmp_path, stop):
+    """Past the cap, the same command stops at once, so the hint names --max-cost."""
+    output = tmp_path / "out.json"
+    response = TranslationResponse(
+        text="Hola", tokens_used=10, cost=0.005, time_taken=1, **stop
+    )
+    manager = MagicMock(spec=CheckpointManager)
+    with (
+        _run_patches(response, _estimate(0.001)),
+        patch("tinbox.cli.CheckpointManager", return_value=manager),
+        patch("tinbox.cli.status_console") as mock_console,
+    ):
+        result = cli_runner.invoke(
+            app,
+            [
+                *("translate", str(input_file), "--to", "es", "--format", "json"),
+                *("--model", "openai:gpt-4o", "--output", str(output)),
+                *("--checkpoint-dir", str(tmp_path / "checkpoints")),
+                *("--max-cost", "0.0015"),
+            ],
+        )
+
+    assert result.exit_code == 1
+    printed = _printed(mock_console)
+    assert "rerun with --max-cost above $0.0050" in printed
+    assert "rerun the same command" not in printed
+    if "failed_chunks" in stop:
+        errors = json.loads(output.read_text())["errors"]
+        assert errors == [
+            "Translation stopped before chunk 5 of 5; chunk 5 was not translated"
+        ]
+
+
 def test_price_in_requires_price_out(cli_runner, input_file):
     with patch("tinbox.cli.status_console") as mock_console:
         result = cli_runner.invoke(

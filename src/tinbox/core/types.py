@@ -62,6 +62,10 @@ class TranslationProtocol(StrEnum):
     TRANSLATEGEMMA = "translategemma"
 
 
+# Context-aware chunk size in characters when context_size is None
+DEFAULT_CONTEXT_SIZE = 2000
+
+
 class TranslationConfig(BaseModel):
     """Configuration for translation tasks."""
 
@@ -123,7 +127,7 @@ class TranslationConfig(BaseModel):
 
     # Context-aware algorithm specific settings
     context_size: int | None = Field(
-        default=2000,
+        default=DEFAULT_CONTEXT_SIZE,
         gt=0,
         description="Target size for context-aware chunks (characters)",
     )

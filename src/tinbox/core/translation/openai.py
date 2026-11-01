@@ -48,6 +48,7 @@ try:
         PermissionDeniedError,
         RateLimitError,
     )
+    from openai.lib._parsing import type_to_response_format_param
 
     _ACCESS_ERRORS: tuple[type[Exception], ...] = (
         AuthenticationError,
@@ -213,10 +214,14 @@ class OpenAITranslator(ModelInterface):
             "max_tokens": self.max_tokens,
         }
 
-        if request.glossary:
-            kwargs["response_format"] = TranslationWithGlossaryResponse
-        else:
-            kwargs["response_format"] = TranslationWithoutGlossaryResponse
+        # Unlike parse() with a model class, create() with this schema dict returns
+        # truncated or invalid replies instead of raising, so _read_reply rejects
+        # them after their billed usage has been priced
+        kwargs["response_format"] = type_to_response_format_param(
+            TranslationWithGlossaryResponse
+            if request.glossary
+            else TranslationWithoutGlossaryResponse
+        )
 
         if request.reasoning_effort != "minimal":
             kwargs["reasoning_effort"] = request.reasoning_effort
@@ -239,7 +244,7 @@ class OpenAITranslator(ModelInterface):
                     kwargs.pop(parameter, None)
 
         try:
-            return await client.chat.completions.parse(**kwargs)
+            return await client.chat.completions.create(**kwargs)
         except Exception as e:
             reraise_provider_error(e, RateLimitError, _ACCESS_ERRORS)
 

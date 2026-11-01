@@ -28,7 +28,7 @@ dependencies = [
     "python-docx>=1.1.2",
     "tenacity>=8.2.3",
     "pillow>=10.0.0",
-    "genai-prices>=0.2.1",
+    "genai-prices>=0.1.13,<0.3",
 ]
 
 [project.optional-dependencies]

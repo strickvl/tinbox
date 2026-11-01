@@ -1,10 +1,6 @@
 version = 1
 revision = 5
 requires-python = ">=3.12"
-resolution-markers = [
-    "python_full_version >= '3.15'",
-    "python_full_version < '3.15'",
-]
 
 [[package]]
 name = "annotated-doc"
@@ -187,15 +183,15 @@ wheels = [
 
 [[package]]
 name = "genai-prices"
-version = "0.2.1"
+version = "0.1.13"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx2" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/48/1f/f5748da2ef5ce0a3d7735cbfc499cc76d8333876fd4d5942bf72e03e01f7/genai_prices-0.2.1.tar.gz", hash = "sha256:d3c19682e63ae3827e7d166fc92c0f69943f446aa58725f38090301ca1cae36d", size = 159033, upload-time = "2026-10-30T19:03:16.883Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/de/119c7ba00b9ddbf629de34cf390ab472da6d7bc5df0c51cdbec900280a74/genai_prices-0.1.13.tar.gz", hash = "sha256:76c9e2dd3917fdacdf3bc562297c4591384142ea2283c477e1512fafa4e3a384", size = 134622, upload-time = "2026-10-15T09:47:04.739Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/0d/5af9dc89b77ae76eaeacde63bb6cbb2d0be9562f82fd2fa476909f431e16/genai_prices-0.2.1-py3-none-any.whl", hash = "sha256:b438753161537f2e2a5c937887721467dd5a24297a52ae77f946f541ce22c3a0", size = 168200, upload-time = "2026-10-30T19:03:15.339Z" },
+    { url = "https://files.pythonhosted.org/packages/41/5a/b6b7d55148d367d07bcd3efdf24e3086ad199ea5109d0c335a872dfaac95/genai_prices-0.1.13-py3-none-any.whl", hash = "sha256:6d2b40760a2f7f5e207bac9b98de0af80e60c58ead497872a5331a7cee610477", size = 142541, upload-time = "2026-10-15T09:47:03.424Z" },
 ]
 
 [[package]]
@@ -914,7 +910,7 @@ dev = [
 requires-dist = [
     { name = "anthropic", marker = "extra == 'all'", specifier = ">=0.88.0" },
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.88.0" },
-    { name = "genai-prices", specifier = ">=0.2.1" },
+    { name = "genai-prices", specifier = ">=0.1.13,<0.3" },
     { name = "openai", marker = "extra == 'all'", specifier = ">=1.92.0" },
     { name = "openai", marker = "extra == 'openai'", specifier = ">=1.92.0" },
     { name = "pdf2image", marker = "extra == 'all'", specifier = ">=1.17.0" },

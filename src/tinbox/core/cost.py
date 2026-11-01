@@ -7,6 +7,9 @@ from enum import StrEnum
 from pathlib import Path
 
 from tinbox.core.types import FileType, ModelType, file_type_for_path
+from tinbox.utils.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class CostLevel(StrEnum):
@@ -54,16 +57,23 @@ def _catalog_price(
     provider_id = _CATALOG_PROVIDERS.get(model)
     if provider_id is None or not model_name:
         return None
-    # Imported here so commands that never price a model skip loading the catalog
-    from genai_prices import Usage, calc_price
-
     try:
+        # Imported here so commands that never price a model skip loading the catalog
+        from genai_prices import Usage, calc_price
+
         price = calc_price(
             Usage(input_tokens=input_tokens, output_tokens=output_tokens),
             model_ref=model_name,
             provider_id=provider_id,
         )
     except LookupError:
+        return None
+    except Exception as e:
+        # A pricing bug must not fail a request the provider already billed
+        logger.warning(
+            f"Could not price {model_name} from genai-prices, using the provider "
+            f"default: {e!s}"
+        )
         return None
     return float(price.input_price), float(price.output_price)
 

@@ -548,6 +548,16 @@ def test_unknown_model_warns_and_uses_provider_default(tmp_path):
     ) in estimate.warnings[0]
 
 
+def test_catalog_error_falls_back_to_provider_default():
+    """A bug in genai-prices must not turn a billed request into a failed chunk."""
+    with patch("genai_prices.calc_price", side_effect=ValueError("bad price data")):
+        cost = calculate_usage_cost(
+            ModelType.OPENAI, 1000, 500, model_name="gpt-6.1-sol"
+        )
+    # The OpenAI provider default: $2 input, $10 output per 1M tokens
+    assert cost == pytest.approx((1000 * 2 + 500 * 10) / 1e6)
+
+
 def test_long_prompt_is_billed_at_long_context_rate():
     """gpt-6.1-sol charges $4/$15 per 1M tokens once a prompt passes 272K tokens."""
     cost = calculate_usage_cost(
