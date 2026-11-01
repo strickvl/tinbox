@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/tinbox/`: application code (CLI in `cli.py`, core logic in `core/`, shared helpers in `utils/`).
+- `src/tinbox/`: application code (CLI in `cli.py`, review commands in `review_cli.py`, core logic in `core/`, shared helpers in `utils/`).
 - `tests/`: pytest suite, organized by feature area (e.g., `tests/test_core/`, `tests/test_cli.py`).
 - `examples/`: runnable sample inputs and scripts.
 - `plans/`: design notes and proposal drafts.
