@@ -511,6 +511,7 @@ async def test_sliding_window_all_chunks_completed():
 
 async def test_sliding_window_ignores_checkpoint_from_old_window_split(tmp_path):
     """Checkpoints saved before windows split at natural breaks are not resumed."""
+    (tmp_path / "test.txt").write_text("Window one. Window two.")
     config = TranslationConfig(
         source_lang="en",
         target_lang="fr",

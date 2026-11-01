@@ -16,6 +16,13 @@ class TranslationError(Exception):
     pass
 
 
+class ProviderAccessError(TranslationError):
+    """The provider refused the account, so no later request in this run can work.
+
+    Raised for bad API keys, missing permissions, and exhausted quota.
+    """
+
+
 class TranslationRequest(BaseModel):
     """Configuration for a translation request."""
 

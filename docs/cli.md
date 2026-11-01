@@ -74,11 +74,11 @@ TranslateGemma requires an `openai:` model, `OPENAI_BASE_URL`, a `.txt` file, an
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--dry-run` | Off | Show approximate tokens, cost, and time without contacting a model or writing a translation |
-| `--max-cost` | None | Stop when recorded cost exceeds this USD threshold, checked after a request completes |
+| `--max-cost` | None | Refuse to start when the estimate exceeds this USD threshold, and stop when recorded cost exceeds it, checked after a request completes |
 | `--local` | Off | Treat the endpoint as a local model with zero API charges; Ollama is already treated this way |
-| `--force` | Off | Skip the estimate confirmation prompt; does not disable validation or the runtime cost threshold |
+| `--force` | Off | Skip the confirmation prompt and the `--max-cost` pre-flight refusal; does not disable validation or the runtime cost threshold |
 
-Costs use fixed provider-level rates. A request can exceed `--max-cost` before Tinbox stops, and estimates do not guarantee the provider's bill. `--local` changes accounting only; it does not start a server or select an endpoint. See [cost workflows](workflows.md#preview-and-limit-estimated-cost).
+Tinbox asks for confirmation only when the estimated cost reaches $1.00 on a cloud model, or when `--reasoning-effort` is above `minimal`, so short documents and local models run without a prompt. When confirmation is needed and no terminal is attached, for example in a script or CI job, Tinbox exits with code 1 and asks for `--force` instead of waiting for input. Costs use fixed provider-level rates. A request can exceed `--max-cost` before Tinbox stops, and estimates do not guarantee the provider's bill. `--local` changes accounting only; it does not start a server or select an endpoint. See [cost workflows](workflows.md#preview-and-limit-estimated-cost).
 
 ### Checkpoints and glossaries
 

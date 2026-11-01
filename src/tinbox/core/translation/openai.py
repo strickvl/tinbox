@@ -25,6 +25,7 @@ from tinbox.core.translation._shared import (
     get_model_name,
     parse_translation_response,
     prepare_request,
+    reraise_provider_error,
     validate_image_content,
 )
 from tinbox.core.translation.interface import (
@@ -40,10 +41,21 @@ from tinbox.core.types import GlossaryEntry, ModelType, TranslationProtocol
 from tinbox.utils.logging import get_logger
 
 try:
-    from openai import AsyncOpenAI, RateLimitError
+    from openai import (
+        AsyncOpenAI,
+        AuthenticationError,
+        PermissionDeniedError,
+        RateLimitError,
+    )
+
+    _ACCESS_ERRORS: tuple[type[Exception], ...] = (
+        AuthenticationError,
+        PermissionDeniedError,
+    )
 except ImportError:
     AsyncOpenAI = None
     RateLimitError = None
+    _ACCESS_ERRORS = ()
 
 logger = get_logger(__name__)
 
@@ -158,9 +170,7 @@ class OpenAITranslator(ModelInterface):
                     stop=["<end_of_turn>", "<eos>"],
                 )
             except Exception as e:
-                if RateLimitError is not None and isinstance(e, RateLimitError):
-                    raise
-                raise TranslationError(f"Translation failed: {e!s}") from e
+                reraise_provider_error(e, RateLimitError, _ACCESS_ERRORS)
 
         kwargs: dict = {
             "model": get_model_name(request),
@@ -197,9 +207,7 @@ class OpenAITranslator(ModelInterface):
         try:
             return await client.chat.completions.parse(**kwargs)
         except Exception as e:
-            if RateLimitError is not None and isinstance(e, RateLimitError):
-                raise
-            raise TranslationError(f"Translation failed: {e!s}") from e
+            reraise_provider_error(e, RateLimitError, _ACCESS_ERRORS)
 
     async def translate(
         self,

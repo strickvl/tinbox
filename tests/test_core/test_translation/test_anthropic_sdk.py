@@ -8,7 +8,10 @@ import pytest
 from anthropic import AsyncAnthropic
 
 from tinbox.core.translation.anthropic import AnthropicTranslator
-from tinbox.core.translation.interface import TranslationRequest
+from tinbox.core.translation.interface import (
+    ProviderAccessError,
+    TranslationRequest,
+)
 from tinbox.core.types import ModelType
 
 
@@ -107,4 +110,45 @@ async def test_translation_through_real_sdk(
 
     assert response.text == "  Hello, world!\n"
     assert response.tokens_used == 20
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "error_type"),
+    [(401, "authentication_error"), (403, "permission_error")],
+)
+@pytest.mark.asyncio
+async def test_access_errors_raise_provider_access_error(status: int, error_type: str):
+    requests: list[httpx2.Request] = []
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(
+            status,
+            json={
+                "type": "error",
+                "error": {"type": error_type, "message": "invalid x-api-key"},
+            },
+        )
+
+    async with AsyncAnthropic(
+        api_key="test-key",
+        base_url="http://test.invalid",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
+    ) as client:
+        translator = AnthropicTranslator()
+        translator._client = client
+        with pytest.raises(ProviderAccessError, match="invalid x-api-key"):
+            await translator.translate(
+                TranslationRequest(
+                    source_lang="de",
+                    target_lang="en",
+                    content="Hallo, Welt!",
+                    content_type="text/plain",
+                    model=ModelType.ANTHROPIC,
+                    model_params={"model_name": "claude-sonnet-5-5"},
+                )
+            )
+
     assert len(requests) == 1

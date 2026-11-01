@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tinbox.core.cost import (
+    CostEstimate,
     CostLevel,
     calculate_usage_cost,
     estimate_context_aware_tokens,
@@ -463,3 +464,51 @@ def test_reasoning_effort_with_ollama():
     ]
     assert len(reasoning_warnings) == 1
     assert "Reasoning effort is 'high'" in reasoning_warnings[0]
+
+
+@pytest.mark.parametrize(
+    "model,local,reasoning_effort,chars,expected",
+    [
+        # A short cloud document costs cents: no prompt
+        (ModelType.OPENAI, False, "minimal", 400, False),
+        # Enough text to pass the dollar threshold: prompt
+        (ModelType.OPENAI, False, "minimal", 400_000, True),
+        # Local models never cost money: no prompt however long
+        (ModelType.OLLAMA, False, "minimal", 400_000, False),
+        (ModelType.OPENAI, True, "minimal", 400_000, False),
+        # Reasoning makes the estimate unreliable: prompt even when cheap or local
+        (ModelType.OPENAI, False, "high", 400, True),
+        (ModelType.OLLAMA, False, "high", 400, True),
+    ],
+)
+def test_requires_confirmation_only_when_money_or_uncertainty(
+    tmp_path, model, local, reasoning_effort, chars, expected
+):
+    file_path = tmp_path / "doc.txt"
+    file_path.write_text("a" * chars)
+
+    estimate = estimate_cost(
+        file_path, model, reasoning_effort=reasoning_effort, local=local
+    )
+
+    assert estimate.requires_confirmation is expected
+
+
+def test_cost_estimate_defaults_confirmation_from_threshold():
+    cheap = CostEstimate(
+        estimated_tokens=1, estimated_cost=0.5, estimated_time=1.0, warnings=[]
+    )
+    pricey = CostEstimate(
+        estimated_tokens=1, estimated_cost=1.0, estimated_time=1.0, warnings=[]
+    )
+    forced = CostEstimate(
+        estimated_tokens=1,
+        estimated_cost=50.0,
+        estimated_time=1.0,
+        warnings=[],
+        requires_confirmation=False,
+    )
+
+    assert cheap.requires_confirmation is False
+    assert pricey.requires_confirmation is True
+    assert forced.requires_confirmation is False

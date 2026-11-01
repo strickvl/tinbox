@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Ask for confirmation only when the estimated cost reaches $1.00 on a cloud model or `--reasoning-effort` is above `minimal`. Short documents and local models start without a prompt. When confirmation is needed and no terminal is attached, `tinbox translate` exits with code 1 and names `--force` instead of waiting on a prompt that cannot be answered.
+- Refuse to start when the estimate already exceeds `--max-cost`; `--force` overrides the refusal. The runtime check after each request is unchanged.
+- Resume from a checkpoint only when it matches the current run. Checkpoints now record a SHA-256 of the input file, the model name, and the chunking settings, and Tinbox compares them before reusing saved chunks. Previously a rerun with a different `--context-size`, an edited input, or a different file with the same name silently spliced old translations onto new text and dropped the rest. Mismatches, and checkpoints written by 0.5.1 or older, are logged and the translation starts from the beginning.
+- Keep the checkpoint and exit with code 1 when a page-based translation finishes with failed pages. The output is still written with `TRANSLATION_FAILED` placeholders, and rerunning the same command retries only the failed pages. Previously the run exited 0 and deleted the checkpoint, so retrying one page meant paying for every page again.
+- Stop retrying requests that cannot succeed. A bad API key, a missing permission, or an OpenAI `insufficient_quota` 429 now fails the page immediately, marks the remaining pages as skipped, and stops sending requests. Previously each page retried for about six minutes. Transient rate limits still retry, now honouring a numeric `retry-after` header (capped at 120 s), and the last failure surfaces the provider's own error instead of a `RetryError` wrapper.
+
 ## 0.5.1 (2026-10-29)
 
 - Accept Latin as a source or target language: `la`, `lat`, or `latin` (#47).

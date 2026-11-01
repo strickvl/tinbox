@@ -124,6 +124,10 @@ def get_cost_level(cost: float) -> CostLevel:
         return CostLevel.VERY_HIGH
 
 
+# Estimated cost in USD at or above which the CLI asks before translating
+CONFIRMATION_COST_THRESHOLD = 1.0
+
+
 class CostEstimate:
     """Cost estimate for a translation task."""
 
@@ -134,7 +138,7 @@ class CostEstimate:
         estimated_time: float,
         warnings: list[str],
         *,
-        requires_confirmation: bool = True,
+        requires_confirmation: bool | None = None,
     ) -> None:
         """Initialize cost estimate.
 
@@ -143,12 +147,18 @@ class CostEstimate:
             estimated_cost: Estimated cost in USD
             estimated_time: Estimated time in seconds
             warnings: List of warning messages
+            requires_confirmation: Whether the CLI should ask before translating.
+                Defaults to whether the cost reaches CONFIRMATION_COST_THRESHOLD.
         """
         self.estimated_tokens = estimated_tokens
         self.estimated_cost = estimated_cost
         self.estimated_time = estimated_time
         self.warnings = warnings
-        self.requires_confirmation = requires_confirmation
+        self.requires_confirmation = (
+            estimated_cost >= CONFIRMATION_COST_THRESHOLD
+            if requires_confirmation is None
+            else requires_confirmation
+        )
         self.cost_level = get_cost_level(estimated_cost)
 
 
@@ -278,5 +288,10 @@ def estimate_cost(
         estimated_cost=estimated_cost,
         estimated_time=estimated_time,
         warnings=warnings,
-        requires_confirmation=not local_model or reasoning_effort != "minimal",
+        # Ask only when real money is at stake or the estimate is unreliable;
+        # cheap cloud runs and local models proceed without a prompt.
+        requires_confirmation=(
+            not local_model and estimated_cost >= CONFIRMATION_COST_THRESHOLD
+        )
+        or reasoning_effort != "minimal",
     )

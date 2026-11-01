@@ -327,6 +327,7 @@ def test_ollama_context_notice_does_not_require_confirmation(
 async def test_checkpoint_rejects_different_protocol_or_pricing(
     tmp_path: Path, changed: dict
 ):
+    (tmp_path / "source.txt").write_text("Hallo")
     config = TranslationConfig(
         source_lang="de",
         target_lang="en",

@@ -236,6 +236,7 @@ def test_translate_with_warnings(cli_runner):
         with (
             patch("tinbox.cli.estimate_cost", return_value=estimate),
             patch("tinbox.cli.status_console") as mock_console,
+            patch("tinbox.cli._confirmation_available", return_value=True),
             patch("typer.confirm", return_value=False),
         ):
             result = cli_runner.invoke(
@@ -413,7 +414,7 @@ def test_translate_force_mode(
 
 
 def test_translate_max_cost(cli_runner):
-    """Test translation with max cost threshold."""
+    """An estimate above --max-cost is refused before any prompt or request."""
     test_file = Path("test.txt")
     test_file.write_text("Test content")
 
@@ -431,7 +432,8 @@ def test_translate_max_cost(cli_runner):
         with (
             patch("tinbox.cli.estimate_cost", return_value=estimate),
             patch("tinbox.cli.status_console") as mock_console,
-            patch("typer.confirm", return_value=False),
+            patch("typer.confirm") as confirm,
+            patch("tinbox.cli.load_document") as load,
         ):
             result = cli_runner.invoke(
                 app,
@@ -447,8 +449,10 @@ def test_translate_max_cost(cli_runner):
                 ],
             )
             assert result.exit_code == 1
-            # Check if the cancellation message was printed
-            mock_console.print.assert_any_call("\nTranslation cancelled.")
+            printed = " ".join(str(call) for call in mock_console.print.call_args_list)
+            assert "exceeds --max-cost $1.00" in printed
+            confirm.assert_not_called()
+            load.assert_not_called()
 
     finally:
         test_file.unlink()

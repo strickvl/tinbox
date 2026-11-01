@@ -7,7 +7,10 @@ import httpx2
 import pytest
 from openai import AsyncOpenAI
 
-from tinbox.core.translation.interface import TranslationRequest
+from tinbox.core.translation.interface import (
+    ProviderAccessError,
+    TranslationRequest,
+)
 from tinbox.core.translation.openai import OpenAITranslator
 from tinbox.core.types import Glossary, GlossaryEntry, ModelType, TranslationProtocol
 
@@ -301,3 +304,51 @@ async def test_translategemma_keeps_completion_token_cap(
     assert body["stop"] == ["<end_of_turn>", "<eos>"]
     assert "max_completion_tokens" not in body
     assert "reasoning_effort" not in body
+
+
+@pytest.mark.parametrize(
+    ("status", "error"),
+    [
+        (401, {"message": "Incorrect API key provided", "code": "invalid_api_key"}),
+        (403, {"message": "Project does not have access", "code": None}),
+        (
+            429,
+            {
+                "message": "You exceeded your current quota",
+                "type": "insufficient_quota",
+                "code": "insufficient_quota",
+            },
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_access_errors_raise_provider_access_error_without_retry(
+    status: int, error: dict
+):
+    requests: list[httpx2.Request] = []
+
+    def respond(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(status, json={"error": error})
+
+    async with AsyncOpenAI(
+        api_key="test-key",
+        base_url="http://test.invalid/v1",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(respond)),
+    ) as client:
+        translator = OpenAITranslator()
+        translator._clients[ModelType.OPENAI] = client
+        with pytest.raises(ProviderAccessError, match=error["message"]):
+            await translator.translate(
+                TranslationRequest(
+                    source_lang="de",
+                    target_lang="en",
+                    content="Hallo, Welt!",
+                    content_type="text/plain",
+                    model=ModelType.OPENAI,
+                    model_params={"model_name": "gpt-5.5"},
+                )
+            )
+
+    assert len(requests) == 1

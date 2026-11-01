@@ -82,9 +82,9 @@ For a local TranslateGemma server, use the dedicated [TranslateGemma setup](docs
 
 ## Limits worth knowing
 
-- **Costs are approximate.** Tinbox uses fixed provider rates, not live model prices. `--max-cost` checks recorded cost after requests complete and is not a billing cap.
+- **Costs are approximate.** Tinbox uses fixed provider rates, not live model prices. `--max-cost` refuses to start when the estimate is above it and otherwise checks recorded cost after requests complete; it is not a billing cap.
 - **Model compatibility varies.** The [provider guide](docs/providers.md#configure-a-cloud-provider) lists current examples and request settings. A dry run checks local options and estimates, not provider access or translation quality.
-- **Check results before relying on them.** A PDF translation can contain failed pages. JSON and Markdown reports include error details; see [output formats](docs/workflows.md#choose-an-output-format).
+- **Check results before relying on them.** A PDF translation can contain failed pages; the command then exits with code 1 and keeps any checkpoint so a rerun retries only those pages. JSON and Markdown reports include error details; see [output formats](docs/workflows.md#choose-an-output-format).
 
 ## Help and development
 

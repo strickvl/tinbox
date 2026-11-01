@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,6 +15,8 @@ logger = get_logger(__name__)
 
 # Bump when sliding-window splits text differently, so old checkpoints are not resumed
 SLIDING_WINDOW_SPLIT_VERSION = 2
+# Bump when the fields a checkpoint must match change, so old checkpoints are not resumed
+CHECKPOINT_FORMAT_VERSION = 2
 
 
 @dataclass
@@ -57,6 +60,40 @@ class CheckpointManager:
         """
         self.config = config
         self._logger = logger
+        self._source_sha256: str | None = None
+
+    def _source_digest(self) -> str:
+        """Hash the source file once, so a checkpoint only resumes the same text."""
+        if self._source_sha256 is None:
+            with open(self.config.input_file, "rb") as f:
+                self._source_sha256 = hashlib.file_digest(f, "sha256").hexdigest()
+        return self._source_sha256
+
+    def _required_config(self) -> dict[str, Any]:
+        """Settings a checkpoint must match before its chunks can be reused.
+
+        Each setting here changes either the source chunks or their translations,
+        so resuming across a change would skip or misplace chunks.
+        """
+        required: dict[str, Any] = {
+            "checkpoint_format_version": CHECKPOINT_FORMAT_VERSION,
+            "source_sha256": self._source_digest(),
+            "source_lang": self.config.source_lang,
+            "target_lang": self.config.target_lang,
+            "model": self.config.model.value,
+            "model_name": self.config.model_name,
+            "algorithm": self.config.algorithm,
+            "translation_protocol": self.config.translation_protocol.value,
+            "local_model": self.config.local_model,
+        }
+        if self.config.algorithm == "sliding-window":
+            required["sliding_window_split_version"] = SLIDING_WINDOW_SPLIT_VERSION
+            required["window_size"] = self.config.window_size
+            required["overlap_size"] = self.config.overlap_size
+        elif self.config.algorithm == "context-aware":
+            required["context_size"] = self.config.context_size
+            required["custom_split_token"] = self.config.custom_split_token
+        return required
 
     def _get_checkpoint_path(self) -> Path:
         """Get the path for the checkpoint file.
@@ -94,13 +131,21 @@ class CheckpointManager:
                 "time_taken": state.time_taken,
                 "glossary_entries": state.glossary_entries,
                 "config": {
+                    "checkpoint_format_version": CHECKPOINT_FORMAT_VERSION,
+                    "input_path": str(self.config.input_file.resolve()),
+                    "source_sha256": self._source_digest(),
                     "source_lang": self.config.source_lang,
                     "target_lang": self.config.target_lang,
                     "model": self.config.model.value,
+                    "model_name": self.config.model_name,
                     "algorithm": self.config.algorithm,
                     "translation_protocol": self.config.translation_protocol.value,
                     "local_model": self.config.local_model,
                     "sliding_window_split_version": SLIDING_WINDOW_SPLIT_VERSION,
+                    "window_size": self.config.window_size,
+                    "overlap_size": self.config.overlap_size,
+                    "context_size": self.config.context_size,
+                    "custom_split_token": self.config.custom_split_token,
                 },
             }
 
@@ -135,31 +180,26 @@ class CheckpointManager:
             with open(checkpoint_path) as f:
                 data = json.load(f)
 
-            # Validate checkpoint matches current config
-            config = data.get("config", {})
-            if (
-                config.get("source_lang") != self.config.source_lang
-                or config.get("target_lang") != self.config.target_lang
-                or config.get("model") != self.config.model.value
-                or config.get("algorithm") != self.config.algorithm
-                or config.get("translation_protocol", "chat")
-                != self.config.translation_protocol.value
-                or config.get("local_model", False) != self.config.local_model
-                or (
-                    self.config.algorithm == "sliding-window"
-                    and config.get("sliding_window_split_version", 1)
-                    != SLIDING_WINDOW_SPLIT_VERSION
-                )
-            ):
+            saved = data.get("config", {})
+            if "source_sha256" not in saved:
                 self._logger.warning(
-                    "Checkpoint configuration mismatch",
-                    checkpoint_config=config,
-                    current_config={
-                        "source_lang": self.config.source_lang,
-                        "target_lang": self.config.target_lang,
-                        "model": self.config.model.value,
-                        "algorithm": self.config.algorithm,
-                    },
+                    "Ignoring checkpoint saved by an older tinbox version; "
+                    "translating from the beginning",
+                    checkpoint_path=str(checkpoint_path),
+                )
+                return None
+
+            mismatched = {
+                key: {"checkpoint": saved.get(key), "current": current}
+                for key, current in self._required_config().items()
+                if saved.get(key) != current
+            }
+            if mismatched:
+                self._logger.warning(
+                    "Ignoring checkpoint that does not match this run; "
+                    "translating from the beginning",
+                    checkpoint_path=str(checkpoint_path),
+                    mismatched=mismatched,
                 )
                 return None
 

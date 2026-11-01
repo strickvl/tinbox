@@ -36,6 +36,7 @@ class RecordingTranslator:
 
 
 def review_config(tmp_path: Path, **kwargs: object) -> TranslationConfig:
+    (tmp_path / "source.txt").write_text("First.|||Second.")
     return TranslationConfig.model_validate(
         {
             "source_lang": "en",
