@@ -213,3 +213,26 @@ async def test_word_processor_skips_header_variants_word_does_not_show(
     pages = [page async for page in processor.extract_content(file_path)]
 
     assert pages == ["Default header\n\nBody"]
+
+
+@pytest.mark.asyncio
+async def test_word_processor_reads_first_page_header_inherited_by_later_section(
+    processor: WordProcessor, tmp_path: Path
+):
+    """Section 2 turns on Different First Page and inherits section 1's hidden part."""
+    doc = Document()
+    first = doc.sections[0]
+    first.header.paragraphs[0].text = "Default header"
+    first.first_page_header.paragraphs[0].text = "Title page header"
+    doc.add_paragraph("Section one")
+    second = doc.add_section()
+    second.different_first_page_header_footer = True
+    doc.add_paragraph("Section two")
+    file_path = tmp_path / "inherited.docx"
+    doc.save(str(file_path))
+
+    pages = [page async for page in processor.extract_content(file_path)]
+
+    assert pages == [
+        "Default header\n\nTitle page header\n\nSection one\n\nSection two"
+    ]

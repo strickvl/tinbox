@@ -104,8 +104,8 @@ def _header_footer_texts(doc: DocxDocument, *, footers: bool) -> list[str]:
         if even_pages:
             parts.append(even)
         for part in parts:
-            if part.is_linked_to_previous:
-                continue
+            # A linked part reads the previous section's text, so a variant that
+            # is first turned on in a later section is still read
             text = "\n\n".join(_block_texts(part))
             if text and text not in texts:
                 texts.append(text)
