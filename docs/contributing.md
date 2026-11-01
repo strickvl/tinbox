@@ -40,7 +40,8 @@ just test --cov-report=html
 
 | Location | Contents |
 | --- | --- |
-| `src/tinbox/cli.py` | Commands, options, and translation flow |
+| `src/tinbox/cli.py` | The `translate` and `doctor` commands, their options, and the translation flow |
+| `src/tinbox/review_cli.py` | The `prepare-matches`, `annotate-review`, and `review` commands |
 | `src/tinbox/core/processor/` | Text, PDF, and DOCX input readers |
 | `src/tinbox/core/translation/` | Provider adapters, algorithms, checkpoints, and glossaries |
 | `src/tinbox/core/cost.py` and `output.py` | Cost estimates and output formats |
