@@ -48,7 +48,7 @@ Prefer a local model? Use [Gemma 4 with Ollama](docs/providers.md#connect-to-oll
 | --- | --- | --- |
 | `.txt`, `.md`, `.markdown`, `.rst`, `.org`, `.adoc`, `.asciidoc`, `.text` | Reads plain text and splits it into chunks by default | Context-aware translation for longer text; markup is passed to the model, which is asked to keep it |
 | `.pdf` | Converts each page to an image | Requires Poppler, PDF dependencies, and a vision-capable model |
-| `.docx` | Extracts paragraph text | Table contents are omitted; Word formatting and page layout are not preserved |
+| `.docx` | Extracts paragraphs, tables, headers, footers, footnotes, and endnotes | Each table row becomes one line with cells separated by ` \| `; text boxes and content controls are not read; Word formatting and page layout are not preserved |
 
 All inputs produce **text, JSON, or a Markdown report**. Tinbox does not export translated PDF or Word files. Translation quality and language coverage depend on the model; the CLI accepts a [defined set of language codes](docs/cli.md#languages).
 

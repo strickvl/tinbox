@@ -2,6 +2,7 @@
 
 import httpx2
 import pytest
+from anthropic import BadRequestError
 from openai import RateLimitError
 
 from tinbox.core.translation._shared import build_retry_decorator, is_quota_exhausted
@@ -93,5 +94,66 @@ def test_is_quota_exhausted_reads_code_and_body(body: object, expected: bool):
     request = httpx2.Request("POST", "http://test.invalid/v1/chat/completions")
     response = httpx2.Response(429, request=request)
     error = RateLimitError("rate limited", response=response, body=body)
+
+    assert is_quota_exhausted(error) is expected
+
+
+def gemini_rate_limit(quota_id: str) -> RateLimitError:
+    """A 429 shaped like Gemini's OpenAI-compatible endpoint sends it."""
+    body = [
+        {
+            "error": {
+                "code": 429,
+                "message": "You exceeded your current quota.",
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [{"quotaId": quota_id}],
+                    }
+                ],
+            }
+        }
+    ]
+    request = httpx2.Request("POST", "http://test.invalid/v1/chat/completions")
+    response = httpx2.Response(429, json=body, request=request)
+    return RateLimitError("rate limited", response=response, body=body)
+
+
+def test_gemini_daily_quota_is_not_retried():
+    error = gemini_rate_limit("GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+    calls, sleeps, result = run_with_failures([error])
+
+    assert calls == 1
+    assert sleeps == []
+    assert result is error
+
+
+def test_gemini_per_minute_limit_is_still_retried():
+    error = gemini_rate_limit("GenerateRequestsPerMinutePerProjectPerModel-FreeTier")
+    calls, sleeps, result = run_with_failures([error])
+
+    assert result == "ok"
+    assert calls == 2
+    assert sleeps == [4]
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Your credit balance is too low to access the Anthropic API.", True),
+        ("max_tokens: 99999999 > 64000, which is the maximum allowed", False),
+    ],
+)
+def test_anthropic_400_is_an_account_limit_only_for_credit(
+    message: str, expected: bool
+):
+    body = {
+        "type": "error",
+        "error": {"type": "invalid_request_error", "message": message},
+    }
+    request = httpx2.Request("POST", "http://test.invalid/v1/messages")
+    response = httpx2.Response(400, json=body, request=request)
+    error = BadRequestError(message, response=response, body=body)
 
     assert is_quota_exhausted(error) is expected

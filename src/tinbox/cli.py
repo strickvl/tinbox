@@ -294,12 +294,12 @@ def translate(
     glossary_file: Path | None = typer.Option(
         None,
         "--glossary-file",
-        help="Path to existing glossary file (JSON format) to load initial terms from.",
+        help="Glossary JSON file whose terms are used as given. Implies --glossary.",
     ),
     save_glossary: Path | None = typer.Option(
         None,
         "--save-glossary",
-        help="Path to save the updated glossary after translation.",
+        help="Path to save the updated glossary after translation. Implies --glossary.",
     ),
     reasoning_effort: str = typer.Option(
         "minimal",
@@ -363,6 +363,19 @@ def translate(
 
         if effective_algorithm not in ("page", "sliding-window", "context-aware"):
             raise ValueError(f"Invalid translation algorithm '{effective_algorithm}'")
+
+        # Loading or saving a glossary only makes sense with the glossary on
+        use_glossary = (
+            use_glossary or glossary_file is not None or save_glossary is not None
+        )
+        # Load the glossary before estimating cost, so a bad file fails early
+        glossary_manager = None
+        if use_glossary:
+            glossary_manager = (
+                GlossaryManager.load_from_file(glossary_file)
+                if glossary_file
+                else GlossaryManager()
+            )
 
         # Create translation config (use normalized language codes)
         config = TranslationConfig(
@@ -492,14 +505,6 @@ def translate(
         checkpoint_manager = None
         if config.checkpoint_dir:
             checkpoint_manager = CheckpointManager(config)
-
-        # Initialize glossary manager
-        glossary_manager = None
-        if use_glossary:
-            if glossary_file:
-                glossary_manager = GlossaryManager.load_from_file(glossary_file)
-            else:
-                glossary_manager = GlossaryManager()
 
         # Show progress
         with Progress(

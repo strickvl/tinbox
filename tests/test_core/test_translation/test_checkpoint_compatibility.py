@@ -62,7 +62,7 @@ async def test_unchanged_run_resumes_and_records_settings(tmp_path):
     assert state is not None
     assert state.translated_chunks == {1: "Première phrase.", 2: "Deuxième phrase."}
     saved = json.loads(checkpoint_path.read_text())["config"]
-    assert saved["checkpoint_format_version"] == 2
+    assert saved["checkpoint_format_version"] == 3
     assert len(saved["source_sha256"]) == 64
     assert saved["input_path"] == str(config.input_file.resolve())
     assert saved["model_name"] == "gpt-4o"

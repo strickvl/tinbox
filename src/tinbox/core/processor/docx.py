@@ -7,8 +7,12 @@ from pathlib import Path
 from zipfile import BadZipFile
 
 from docx import Document
+from docx.blkcntnr import BlockItemContainer
 from docx.document import Document as DocxDocument
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.opc.exceptions import PackageNotFoundError
+from docx.oxml.parser import parse_xml
+from docx.table import Table, _Cell
 
 from tinbox.core.processor import (
     BaseDocumentProcessor,
@@ -45,20 +49,107 @@ def detect_rtl(text: str) -> bool:
     )
 
 
-def _extract_text(doc: DocxDocument) -> str:
-    """Extract all text from a Word document.
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_NOTE_RELATIONSHIPS = (RT.FOOTNOTES, RT.ENDNOTES)
 
-    Args:
-        doc: The Word document to process
 
-    Returns:
-        The document's text content as a string
+def _cell_text(cell: _Cell) -> str:
+    """Flatten a table cell onto one line; nested table rows are joined by `` / ``."""
+    return " ".join(_block_texts(cell)).replace("\n", " / ")
+
+
+def _table_text(table: Table) -> str:
+    """Render a table as one line per row, with cells separated by `` | ``.
+
+    Reads the cell XML directly: a cell merged across columns is one element,
+    and a cell merged down rows is written once, in its first row.
     """
-    paragraphs = []
-    for paragraph in doc.paragraphs:
-        if paragraph.text.strip():
-            paragraphs.append(paragraph.text.strip())
-    return "\n".join(paragraphs)
+    rows = []
+    for tr in table._tbl.tr_lst:
+        cells = [
+            _cell_text(_Cell(tc, table)) for tc in tr.tc_lst if tc.vMerge != "continue"
+        ]
+        if any(cells):
+            rows.append(" | ".join(cells))
+    return "\n".join(rows)
+
+
+def _block_texts(container: BlockItemContainer | DocxDocument) -> list[str]:
+    """Return the non-empty paragraphs and tables of a container, in reading order."""
+    blocks = []
+    for item in container.iter_inner_content():
+        text = _table_text(item) if isinstance(item, Table) else item.text.strip()
+        if text:
+            blocks.append(text)
+    return blocks
+
+
+def _header_footer_texts(doc: DocxDocument, *, footers: bool) -> list[str]:
+    """Return each distinct header (or footer) text that Word would show.
+
+    First-page and even-page parts stay in the file after their options are
+    turned off, so they are read only while the option is on.
+    """
+    texts: list[str] = []
+    even_pages = doc.settings.odd_and_even_pages_header_footer
+    for section in doc.sections:
+        default, first, even = (
+            (section.footer, section.first_page_footer, section.even_page_footer)
+            if footers
+            else (section.header, section.first_page_header, section.even_page_header)
+        )
+        parts = [default]
+        if section.different_first_page_header_footer:
+            parts.append(first)
+        if even_pages:
+            parts.append(even)
+        for part in parts:
+            if part.is_linked_to_previous:
+                continue
+            text = "\n\n".join(_block_texts(part))
+            if text and text not in texts:
+                texts.append(text)
+    return texts
+
+
+def _note_texts(doc: DocxDocument) -> list[str]:
+    """Return footnote and endnote texts, numbered in the order they are stored.
+
+    python-docx has no API for notes, so this reads their XML parts directly.
+    """
+    notes = []
+    for rel in doc.part.rels.values():
+        if rel.is_external or rel.reltype not in _NOTE_RELATIONSHIPS:
+            continue
+        root = parse_xml(rel.target_part.blob)
+        for note in root:
+            # Separator notes hold the line Word draws above the notes, not text
+            if note.get(f"{_W}type") not in (None, "normal"):
+                continue
+            paragraphs = (
+                "".join(t.text or "" for t in p.iter(f"{_W}t")).strip()
+                for p in note.iter(f"{_W}p")
+            )
+            text = " ".join(p for p in paragraphs if p)
+            if text:
+                notes.append(f"[{len(notes) + 1}] {text}")
+    return notes
+
+
+def extract_text(doc: DocxDocument) -> str:
+    """Extract all translatable text from a Word document.
+
+    Headers come first, then the body in reading order (paragraphs and tables),
+    then footers, then footnotes and endnotes. Blocks are separated by a blank
+    line so chunking can split on paragraph breaks.
+    """
+    blocks = [
+        *_header_footer_texts(doc, footers=False),
+        *_block_texts(doc),
+        *_header_footer_texts(doc, footers=True),
+        *_note_texts(doc),
+    ]
+    return "\n\n".join(blocks)
 
 
 class WordProcessor(BaseDocumentProcessor):
@@ -103,7 +194,7 @@ class WordProcessor(BaseDocumentProcessor):
             core_props = doc.core_properties
 
             # Extract text and check for RTL content
-            text = _extract_text(doc)
+            text = extract_text(doc)
 
             return DocumentMetadata(
                 file_type=FileType.DOCX,
@@ -160,7 +251,7 @@ class WordProcessor(BaseDocumentProcessor):
         try:
             # Load document and extract text
             doc = Document(str(file_path))
-            text = _extract_text(doc)
+            text = extract_text(doc)
             yield text
 
         except (PackageNotFoundError, BadZipFile) as e:

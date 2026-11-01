@@ -176,3 +176,45 @@ async def test_pdf_processor_dpi_settings(sample_pdf: Path):
 
     assert high_image.width > low_image.width
     assert high_image.height > low_image.height
+
+
+@pytest.mark.asyncio
+async def test_pdf_processor_converts_one_page_at_a_time(tmp_path: Path, monkeypatch):
+    """Only one decoded page image is held at a time, so long PDFs fit in memory."""
+    pdf_path = tmp_path / "three_pages.pdf"
+    writer = PdfWriter()
+    for _ in range(3):
+        writer.add_blank_page(width=200, height=200)
+    with open(pdf_path, "wb") as f:
+        writer.write(f)
+
+    calls: list[tuple[int, int]] = []
+    closed: list[int] = []
+
+    def fake_convert(path, *, first_page, last_page, dpi):
+        # The previous page's image must be closed before the next is decoded
+        assert len(closed) == len(calls)
+        calls.append((first_page, last_page))
+        image = Image.new("RGB", (10, 10), color=(first_page * 40, 0, 0))
+        close = image.close
+        monkeypatch.setattr(
+            image, "close", lambda: (closed.append(first_page), close())[1]
+        )
+        return [image]
+
+    monkeypatch.setattr(
+        "tinbox.core.processor.pdf._get_convert_from_path", lambda: fake_convert
+    )
+    monkeypatch.setattr(
+        "tinbox.core.processor.pdf._check_poppler_available", lambda: None
+    )
+
+    pages = [page async for page in PdfProcessor().extract_content(pdf_path)]
+
+    assert calls == [(1, 1), (2, 2), (3, 3)]
+    pngs = [page for page in pages if isinstance(page, bytes)]
+    assert [Image.open(io.BytesIO(png)).getpixel((0, 0)) for png in pngs] == [
+        (40, 0, 0),
+        (80, 0, 0),
+        (120, 0, 0),
+    ]

@@ -1,6 +1,7 @@
 """Exercise Claude requests through the real SDK without network I/O."""
 
 import json
+import re
 from typing import Literal
 
 import httpx2
@@ -114,11 +115,22 @@ async def test_translation_through_real_sdk(
 
 
 @pytest.mark.parametrize(
-    ("status", "error_type"),
-    [(401, "authentication_error"), (403, "permission_error")],
+    ("status", "error_type", "message"),
+    [
+        (401, "authentication_error", "invalid x-api-key"),
+        (403, "permission_error", "invalid x-api-key"),
+        (
+            400,
+            "invalid_request_error",
+            "Your credit balance is too low to access the Anthropic API. "
+            "Please go to Plans & Billing to upgrade or purchase credits.",
+        ),
+    ],
 )
 @pytest.mark.asyncio
-async def test_access_errors_raise_provider_access_error(status: int, error_type: str):
+async def test_access_errors_raise_provider_access_error(
+    status: int, error_type: str, message: str
+):
     requests: list[httpx2.Request] = []
 
     def respond(request: httpx2.Request) -> httpx2.Response:
@@ -127,7 +139,7 @@ async def test_access_errors_raise_provider_access_error(status: int, error_type
             status,
             json={
                 "type": "error",
-                "error": {"type": error_type, "message": "invalid x-api-key"},
+                "error": {"type": error_type, "message": message},
             },
         )
 
@@ -139,7 +151,7 @@ async def test_access_errors_raise_provider_access_error(status: int, error_type
     ) as client:
         translator = AnthropicTranslator()
         translator._client = client
-        with pytest.raises(ProviderAccessError, match="invalid x-api-key"):
+        with pytest.raises(ProviderAccessError, match=re.escape(message)):
             await translator.translate(
                 TranslationRequest(
                     source_lang="de",

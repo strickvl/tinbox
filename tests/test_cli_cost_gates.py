@@ -1,4 +1,4 @@
-"""Tests for the pre-flight cost gates and partial-failure exit of `translate`."""
+"""Tests for the pre-flight checks and partial-failure exit of `translate`."""
 
 import json
 from collections.abc import Generator
@@ -404,3 +404,69 @@ def test_custom_prices_and_metadata_reach_estimate_config_and_json(
     assert metadata["model_name"] == "my-proxy-model"
     assert (metadata["input_tokens"], metadata["output_tokens"]) == (10, 5)
     assert metadata["tinbox_version"] == __version__
+
+
+@pytest.mark.parametrize(
+    "flags", [["--glossary-file", "terms.json"], ["--save-glossary", "saved.json"]]
+)
+def test_glossary_file_flags_turn_the_glossary_on(
+    cli_runner, input_file, tmp_path, flags
+):
+    """A glossary file passed without --glossary used to be ignored silently."""
+    (tmp_path / "terms.json").write_text('{"entries": {"Test": "Prueba"}}')
+    flags = [flags[0], str(tmp_path / flags[1])]
+    response = TranslationResponse(text="Hola", tokens_used=10, cost=0.01, time_taken=1)
+    with (
+        _run_patches(response, _estimate(0.03)),
+        patch("tinbox.cli.status_console"),
+        patch("tinbox.cli.translate_document", new_callable=AsyncMock) as translate,
+    ):
+        translate.return_value = response
+        result = cli_runner.invoke(
+            app,
+            [
+                "translate",
+                str(input_file),
+                "--to",
+                "es",
+                "--model",
+                "openai:gpt-4o",
+                "--output",
+                str(tmp_path / "out.txt"),
+                *flags,
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    kwargs = translate.await_args.kwargs if translate.await_args else {}
+    assert kwargs["config"].use_glossary is True
+    expected = {"Test": "Prueba"} if flags[0] == "--glossary-file" else {}
+    assert kwargs["glossary_manager"].get_current_glossary().entries == expected
+
+
+def test_invalid_glossary_file_stops_before_translating(
+    cli_runner, input_file, tmp_path
+):
+    glossary = tmp_path / "terms.json"
+    glossary.write_text("{not json")
+    with (
+        patch("tinbox.cli.status_console") as mock_console,
+        patch("tinbox.cli.estimate_cost") as estimate,
+    ):
+        result = cli_runner.invoke(
+            app,
+            [
+                "translate",
+                str(input_file),
+                "--to",
+                "es",
+                "--model",
+                "openai:gpt-4o",
+                "--glossary-file",
+                str(glossary),
+            ],
+        )
+
+    assert result.exit_code == 1
+    assert "Could not read glossary file" in _printed(mock_console)
+    estimate.assert_not_called()

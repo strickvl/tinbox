@@ -307,30 +307,101 @@ async def test_translategemma_keeps_completion_token_cap(
     assert "reasoning_effort" not in body
 
 
-@pytest.mark.parametrize(
-    ("status", "error"),
+def _gemini_error(status: int, message: str, details: list[dict]) -> list[dict]:
+    """Gemini's OpenAI-compatible endpoint wraps its error object in a list."""
+    return [
+        {
+            "error": {
+                "code": status,
+                "message": message,
+                "status": "RESOURCE_EXHAUSTED",
+                "details": details,
+            }
+        }
+    ]
+
+
+GEMINI_DAILY_QUOTA = _gemini_error(
+    429,
+    "You exceeded your current quota, please check your plan and billing details. "
+    "Quota exceeded for metric: "
+    "generativelanguage.googleapis.com/generate_content_free_tier_requests, "
+    "limit: 50, model: gemini-2.5-pro\nPlease retry in 34.1s.",
     [
-        (401, {"message": "Incorrect API key provided", "code": "invalid_api_key"}),
-        (403, {"message": "Project does not have access", "code": None}),
+        {
+            "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+            "violations": [
+                {
+                    "quotaMetric": "generativelanguage.googleapis.com/"
+                    "generate_content_free_tier_requests",
+                    "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                }
+            ],
+        },
+        {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "34s"},
+    ],
+)
+GEMINI_PER_MINUTE = _gemini_error(
+    429,
+    "You exceeded your current quota. Please retry in 11.7s.",
+    [
+        {
+            "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+            "violations": [
+                {"quotaId": "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"}
+            ],
+        }
+    ],
+)
+
+
+@pytest.mark.parametrize(
+    ("status", "payload", "message"),
+    [
+        (
+            401,
+            {"error": {"message": "Incorrect API key", "code": "invalid_api_key"}},
+            "Incorrect API key",
+        ),
+        (
+            403,
+            {"error": {"message": "Project does not have access", "code": None}},
+            "Project does not have access",
+        ),
         (
             429,
             {
-                "message": "You exceeded your current quota",
-                "type": "insufficient_quota",
-                "code": "insufficient_quota",
+                "error": {
+                    "message": "You exceeded your current quota",
+                    "type": "insufficient_quota",
+                    "code": "insufficient_quota",
+                }
             },
+            "You exceeded your current quota",
         ),
+        (429, GEMINI_DAILY_QUOTA, "PerDay"),
+        (
+            429,
+            _gemini_error(429, "Quota exceeded for metric: x, limit: 0", []),
+            "limit: 0",
+        ),
+        (
+            400,
+            _gemini_error(400, "Your project has exceeded its spending cap.", []),
+            "spending cap",
+        ),
+        (402, {"error": {"message": "Prepay credits are depleted"}}, "depleted"),
     ],
 )
 @pytest.mark.asyncio
 async def test_access_errors_raise_provider_access_error_without_retry(
-    status: int, error: dict
+    status: int, payload: object, message: str
 ):
     requests: list[httpx2.Request] = []
 
     def respond(request: httpx2.Request) -> httpx2.Response:
         requests.append(request)
-        return httpx2.Response(status, json={"error": error})
+        return httpx2.Response(status, json=payload)
 
     async with AsyncOpenAI(
         api_key="test-key",
@@ -340,7 +411,7 @@ async def test_access_errors_raise_provider_access_error_without_retry(
     ) as client:
         translator = OpenAITranslator()
         translator._clients[ModelType.OPENAI] = client
-        with pytest.raises(ProviderAccessError, match=error["message"]):
+        with pytest.raises(ProviderAccessError, match=message):
             await translator.translate(
                 TranslationRequest(
                     source_lang="de",

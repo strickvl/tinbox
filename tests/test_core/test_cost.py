@@ -122,13 +122,12 @@ def test_estimate_document_tokens(tmp_path, file_type, content, expected_tokens)
             tokens = estimate_document_tokens(file_path)
             assert tokens == expected_tokens
     elif file_type == FileType.DOCX:
-        # Create a mock DOCX file
-        file_path.write_bytes(b"dummy docx content")
-        mock_doc = MagicMock()
-        mock_doc.paragraphs = [MagicMock(text=content)]
-        with patch("docx.Document", return_value=mock_doc):
-            tokens = estimate_document_tokens(file_path)
-            assert tokens == expected_tokens
+        from docx import Document
+
+        doc = Document()
+        doc.add_paragraph(content)
+        doc.save(str(file_path))
+        assert estimate_document_tokens(file_path) == expected_tokens
     else:  # TXT
         file_path.write_text(content)
         tokens = estimate_document_tokens(file_path)
@@ -609,3 +608,19 @@ def test_zero_max_cost_is_a_real_threshold(tmp_path):
     assert any(
         "exceeds maximum threshold ($0.00)" in warning for warning in estimate.warnings
     )
+
+
+def test_docx_estimate_counts_table_words(tmp_path):
+    """Table text is translated, so it has to be priced too."""
+    from docx import Document
+
+    file_path = tmp_path / "table.docx"
+    doc = Document()
+    doc.add_paragraph("one two three")
+    table = doc.add_table(rows=1, cols=2)
+    table.cell(0, 0).text = "four five"
+    table.cell(0, 1).text = "six seven"
+    doc.save(str(file_path))
+
+    # 7 words plus the "|" between cells, at 1.3 tokens per word, rounded up
+    assert estimate_document_tokens(file_path) == 11
