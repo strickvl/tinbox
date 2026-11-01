@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import io
 import json
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Iterator
 from typing import Any, NoReturn
 
 from PIL import Image
@@ -86,19 +87,58 @@ _MAX_RETRY_WAIT_SECONDS = 120.0
 _exponential_wait = wait_exponential(multiplier=1, min=4, max=_MAX_RETRY_WAIT_SECONDS)
 
 
-def is_quota_exhausted(error: BaseException) -> bool:
-    """Return True when a rate-limit error means the account has no credit left.
+# HTTP statuses an account-limit error can arrive with; 402 always means no credit
+_ACCOUNT_LIMIT_STATUSES = {400, 402, 403, 429}
+_ACCOUNT_LIMIT_MESSAGE = re.compile(
+    r"credit balance is too low"  # Anthropic, sent as a 400
+    r"|\b(?:spending|spend)\s+cap\b"  # Gemini project spending cap
+    r"|limit:\s*0(?!\d|\.\d)",  # Gemini: no quota at all for this model or tier
+    re.IGNORECASE,
+)
 
-    OpenAI reports this as a 429 with code ``insufficient_quota``; waiting will
-    never make it succeed.
+
+def _nested_dicts(value: object) -> Iterator[dict]:
+    """Yield every dict inside a decoded JSON error body, outermost first."""
+    if isinstance(value, dict):
+        yield value
+        for item in value.values():
+            yield from _nested_dicts(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _nested_dicts(item)
+
+
+def is_quota_exhausted(error: BaseException) -> bool:
+    """Return True when an API error means the account cannot make more requests.
+
+    Waiting will not make these succeed, so they are neither retried nor
+    treated as a one-page failure:
+
+    - OpenAI: a 429 with code ``insufficient_quota``.
+    - Anthropic: a 400 saying the credit balance is too low.
+    - Gemini: a 429 for a daily quota (``quotaId`` containing ``PerDay`` or
+      ``Daily``), a quota limit of 0, a spending cap, or a 402.
+
+    Gemini also sends per-minute limits as 429 ``RESOURCE_EXHAUSTED``; those
+    stay retryable.
     """
-    body = getattr(error, "body", None)
-    nested = body.get("error") if isinstance(body, dict) else None
-    markers = [getattr(error, "code", None), getattr(error, "type", None)]
-    for detail in (body, nested):
-        if isinstance(detail, dict):
-            markers += [detail.get("code"), detail.get("type")]
-    return "insufficient_quota" in markers
+    status = getattr(error, "status_code", None)
+    if status == 402:
+        return True
+    if status is not None and status not in _ACCOUNT_LIMIT_STATUSES:
+        return False
+    details = list(_nested_dicts(getattr(error, "body", None)))
+    markers = {getattr(error, "code", None), getattr(error, "type", None)}
+    markers.update(d.get(key) for d in details for key in ("code", "type"))
+    if "insufficient_quota" in markers:
+        return True
+    quota_ids = [d.get("quotaId") for d in details]
+    if any(
+        isinstance(quota_id, str) and ("PerDay" in quota_id or "Daily" in quota_id)
+        for quota_id in quota_ids
+    ):
+        return True
+    return status is not None and bool(_ACCOUNT_LIMIT_MESSAGE.search(str(error)))
 
 
 def _retry_after_seconds(error: BaseException | None) -> float | None:
@@ -165,17 +205,15 @@ def reraise_provider_error(
 ) -> NoReturn:
     """Re-raise an SDK error as the exception the retry and algorithm code expect.
 
-    Authentication, permission, and quota-exhausted errors become
-    ``ProviderAccessError``. Other rate-limit errors pass through unchanged so
-    the retry decorator can retry them. Everything else becomes
-    ``TranslationError``.
+    Authentication, permission, and account-limit errors (see
+    ``is_quota_exhausted``) become ``ProviderAccessError``. Other rate-limit
+    errors pass through unchanged so the retry decorator can retry them.
+    Everything else becomes ``TranslationError``.
     """
     is_rate_limit = rate_limit_error_cls is not None and isinstance(
         error, rate_limit_error_cls
     )
-    if isinstance(error, access_error_classes) or (
-        is_rate_limit and is_quota_exhausted(error)
-    ):
+    if isinstance(error, access_error_classes) or is_quota_exhausted(error):
         raise ProviderAccessError(f"Translation failed: {error!s}") from error
     if is_rate_limit:
         raise error

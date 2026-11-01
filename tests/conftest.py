@@ -33,11 +33,13 @@ def reset_logging_and_console():
     # Reset the CLI console and module loggers with fresh instances
     import tinbox.cli
     import tinbox.core.translation.algorithms
+    import tinbox.core.translation.glossary
 
     tinbox.cli.console = Console(force_terminal=False)
     tinbox.cli.status_console = Console(force_terminal=False, stderr=True)
     tinbox.cli.logger = structlog.get_logger()
     tinbox.core.translation.algorithms.logger = structlog.get_logger()
+    tinbox.core.translation.glossary.logger = structlog.get_logger()
 
     yield
 
@@ -49,8 +51,10 @@ def reset_logging_and_console():
 
     import tinbox.cli
     import tinbox.core.translation.algorithms
+    import tinbox.core.translation.glossary
 
     tinbox.cli.console = Console(force_terminal=False)
     tinbox.cli.status_console = Console(force_terminal=False, stderr=True)
     tinbox.cli.logger = structlog.get_logger()
     tinbox.core.translation.algorithms.logger = structlog.get_logger()
+    tinbox.core.translation.glossary.logger = structlog.get_logger()

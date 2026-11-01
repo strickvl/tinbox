@@ -89,8 +89,8 @@ Tinbox asks for confirmation only when the estimated cost reaches $1.00 on a clo
 | `--checkpoint-dir` | None | Enable saved progress in this directory and automatically attempt to resume |
 | `--checkpoint-frequency` | `1` | Save progress every N pages or chunks |
 | `--glossary` | Off | Enable glossary instructions and updates |
-| `--glossary-file` | None | Load a glossary JSON file; requires `--glossary` |
-| `--save-glossary` | None | Save the glossary after translation; requires `--glossary` |
+| `--glossary-file` | None | Load a glossary JSON file whose translations the model cannot change; implies `--glossary` |
+| `--save-glossary` | None | Save the glossary after translation; implies `--glossary` |
 
 See [resume instructions and limits](workflows.md#resume-an-interrupted-translation) and the [glossary format](workflows.md#reuse-a-glossary).
 

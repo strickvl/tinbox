@@ -148,26 +148,28 @@ class PdfProcessor(BaseDocumentProcessor):
                 pdf = pypdf.PdfReader(f)
                 total_pages = len(pdf.pages)
 
-            if end_page is not None:
-                if end_page < start_page:
-                    raise ProcessingError(
-                        "Invalid page range: end_page must be >= start_page"
-                    )
-                end_page = min(end_page, total_pages)
+            if end_page is not None and end_page < start_page:
+                raise ProcessingError(
+                    "Invalid page range: end_page must be >= start_page"
+                )
+            last_page = total_pages if end_page is None else min(end_page, total_pages)
 
             # Convert pages to images (lazy import for optional dependency)
             convert_from_path = _get_convert_from_path()
-            pages = convert_from_path(
-                file_path,
-                first_page=start_page,
-                last_page=end_page,
-                dpi=self.dpi,
-            )
-
-            for page in pages:
+            # One page at a time: a decoded 200 DPI page is about 12 MB, so
+            # converting a long PDF in one call would hold gigabytes at once
+            for page_number in range(start_page, last_page + 1):
+                (page,) = convert_from_path(
+                    file_path,
+                    first_page=page_number,
+                    last_page=page_number,
+                    dpi=self.dpi,
+                )
                 with io.BytesIO() as bio:
                     page.save(bio, format="PNG")
-                    yield bio.getvalue()
+                    png = bio.getvalue()
+                page.close()
+                yield png
 
         except ProcessingError:
             raise

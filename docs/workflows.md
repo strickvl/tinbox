@@ -95,17 +95,17 @@ Create `glossary.json` with an `entries` object that maps source terms to their 
 }
 ```
 
-Enable the glossary explicitly when loading or saving it:
+Load it with `--glossary-file`, which turns the glossary on:
 
 ```bash
 tinbox translate document.txt --model "$TINBOX_MODEL" --from ar --to en \
-  --glossary --glossary-file glossary.json \
+  --glossary-file glossary.json \
   --save-glossary updated-glossary.json --output translated.txt
 ```
 
-`--glossary-file` and `--save-glossary` do not enable `--glossary` themselves. To build a glossary during translation, omit `--glossary-file` and retain the other flags. The model receives the current terms and can return new entries for subsequent chunks.
+The model receives the current terms and can return new entries for later chunks. It cannot change a translation that came from `--glossary-file`, even by returning the term with different capitalisation or spacing: those entries are kept as written, including when a run resumes from a checkpoint. Terms the model adds can be updated by later chunks. `--save-glossary` writes the loaded and added terms together. To build a glossary from scratch, pass `--glossary` or only `--save-glossary`.
 
-Check the logs if expected terms are missing: an absent or malformed glossary file is logged, and translation continues with an empty glossary. Glossaries require the chat protocol and are not supported by TranslateGemma.
+A glossary file that is not valid JSON, or whose `entries` is not an object of strings, stops the run before the cost estimate. A missing file is logged as a warning, and a missing file, an empty file, or `{}` starts an empty glossary, so the same path can be passed to both flags to start a new glossary. Glossaries require the chat protocol and are not supported by TranslateGemma.
 
 ## Resume an interrupted translation
 

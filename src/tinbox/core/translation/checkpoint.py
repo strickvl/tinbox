@@ -15,8 +15,9 @@ logger = get_logger(__name__)
 
 # Bump when sliding-window splits text differently, so old checkpoints are not resumed
 SLIDING_WINDOW_SPLIT_VERSION = 2
-# Bump when the fields a checkpoint must match change, so old checkpoints are not resumed
-CHECKPOINT_FORMAT_VERSION = 2
+# Bump when the fields a checkpoint must match, or the text extracted from an
+# input, change, so old checkpoints are not resumed
+CHECKPOINT_FORMAT_VERSION = 3
 
 
 @dataclass
