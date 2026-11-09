@@ -379,7 +379,7 @@ GEMINI_PER_MINUTE = _gemini_error(
             },
             "You exceeded your current quota",
         ),
-        (429, GEMINI_DAILY_QUOTA, "PerDay"),
+        (429, GEMINI_DAILY_QUOTA, "limit: 50, model: gemini-2.5-pro"),
         (
             429,
             _gemini_error(429, "Quota exceeded for metric: x, limit: 0", []),
