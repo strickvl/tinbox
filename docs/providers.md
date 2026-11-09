@@ -70,7 +70,7 @@ export ANTHROPIC_API_KEY="your-anthropic-api-key"
 tinbox translate document.txt --to de --model anthropic:claude-sonnet-5-5
 ```
 
-Tinbox uses the Anthropic SDK directly. For `claude-sonnet-5-5`, it requests adaptive thinking without a temperature setting. The default `minimal` reasoning setting maps to `low` effort; `medium` and `high` map to the corresponding provider efforts.
+Tinbox uses the Anthropic SDK directly. For `claude-sonnet-5-5`, it requests adaptive thinking without a temperature setting. Tinbox sends no temperature to any Claude model, because API version `2026-10-21` (used by `anthropic>=2`) rejects it; older models such as `claude-sonnet-4-6` therefore sample at the default of 1.0. The default `minimal` reasoning setting maps to `low` effort; `medium` and `high` map to the corresponding provider efforts.
 
 ### Gemini
 
