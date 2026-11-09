@@ -26,7 +26,7 @@ from tinbox.core.types import ModelType
         ("claude-opus-5-5", "minimal", {"type": "adaptive"}, "low", None),
         ("claude-haiku-5-5", "minimal", {"type": "adaptive"}, "low", None),
         ("claude-fable-5-1", "high", {"type": "adaptive"}, "high", None),
-        ("claude-sonnet-4-6", "minimal", None, None, 0.3),
+        ("claude-sonnet-4-6", "minimal", None, None, None),
         (
             "claude-sonnet-4-6",
             "high",

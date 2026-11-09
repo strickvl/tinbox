@@ -320,7 +320,7 @@ async def test_reasoning_effort_minimal_no_thinking(translator: AnthropicTransla
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert "thinking" not in call_kwargs
-        assert call_kwargs["extra_body"] == {"temperature": 0.3}
+        assert "extra_body" not in call_kwargs
 
 
 @pytest.mark.asyncio

@@ -112,12 +112,7 @@ def _extract_text_from_response(content_blocks: list) -> str:
 class AnthropicTranslator(ModelInterface):
     """Anthropic SDK-based translator for Claude models."""
 
-    def __init__(
-        self,
-        temperature: float = 0.3,
-        max_tokens: int = 16384,
-    ) -> None:
-        self.temperature = temperature
+    def __init__(self, max_tokens: int = 16384) -> None:
         self.max_tokens = max_tokens
         self._client: AnthropicClient | None = None
 
@@ -218,14 +213,11 @@ class AnthropicTranslator(ModelInterface):
                 else request.reasoning_effort
             }
         else:
+            # API version 2026-10-21 (anthropic>=2) rejects `temperature`, so
+            # every request samples at the default of 1.0.
             thinking = _thinking_config(request.reasoning_effort)
             if thinking:
                 kwargs["thinking"] = thinking
-                # Extended thinking requires the default temperature of 1.
-            else:
-                # anthropic>=1.0 dropped `temperature` from its signature; older
-                # models still accept it in the request body.
-                kwargs["extra_body"] = {"temperature": self.temperature}
 
         try:
             return await client.messages.create(**kwargs)
