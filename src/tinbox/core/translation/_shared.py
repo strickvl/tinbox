@@ -108,6 +108,22 @@ def _nested_dicts(value: object) -> Iterator[dict]:
             yield from _nested_dicts(item)
 
 
+def provider_error_text(error: BaseException) -> str:
+    """Return the error's text plus any ``message`` in its body it leaves out.
+
+    openai>=3.42 puts the body's message in the text only when the body is a
+    JSON object. Gemini's OpenAI-compatible endpoint sends a list, so without
+    this its explanation (such as "limit: 0") would be lost.
+    """
+    text = str(error)
+    messages = [
+        d["message"]
+        for d in _nested_dicts(getattr(error, "body", None))
+        if isinstance(d.get("message"), str) and d["message"] not in text
+    ]
+    return " - ".join([text, *dict.fromkeys(messages)])
+
+
 def is_quota_exhausted(error: BaseException) -> bool:
     """Return True when an API error means the account cannot make more requests.
 
@@ -138,7 +154,9 @@ def is_quota_exhausted(error: BaseException) -> bool:
         for quota_id in quota_ids
     ):
         return True
-    return status is not None and bool(_ACCOUNT_LIMIT_MESSAGE.search(str(error)))
+    return status is not None and bool(
+        _ACCOUNT_LIMIT_MESSAGE.search(provider_error_text(error))
+    )
 
 
 def _retry_after_seconds(error: BaseException | None) -> float | None:
@@ -213,11 +231,12 @@ def reraise_provider_error(
     is_rate_limit = rate_limit_error_cls is not None and isinstance(
         error, rate_limit_error_cls
     )
+    message = f"Translation failed: {provider_error_text(error)}"
     if isinstance(error, access_error_classes) or is_quota_exhausted(error):
-        raise ProviderAccessError(f"Translation failed: {error!s}") from error
+        raise ProviderAccessError(message) from error
     if is_rate_limit:
         raise error
-    raise TranslationError(f"Translation failed: {error!s}") from error
+    raise TranslationError(message) from error
 
 
 def build_system_instruction(request: TranslationRequest) -> str:
