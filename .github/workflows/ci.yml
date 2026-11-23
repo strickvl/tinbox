@@ -11,7 +11,6 @@ jobs:
   test:
     permissions:
       contents: read
-      id-token: write
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -44,20 +43,12 @@ jobs:
         run: uv sync --locked --all-extras
 
       - name: Run tests
-        run: just test --cov=tinbox --cov-report=xml -v
+        run: just test -v
         env:
           # Provider tests use mocked clients and do not need API credentials.
           OPENAI_API_KEY: ""
           ANTHROPIC_API_KEY: ""
           GOOGLE_API_KEY: ""
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
-        if: matrix.python-version == '3.12'
-        with:
-          files: ./coverage.xml
-          use_oidc: true
-          fail_ci_if_error: false
 
   lint:
     runs-on: ubuntu-latest

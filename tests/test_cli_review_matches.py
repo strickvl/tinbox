@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
 from tinbox.cli import app
@@ -21,6 +22,7 @@ from tinbox.core.review_matches import (
 
 @pytest.fixture
 def saved_bundle(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr("tinbox.review_cli.console", Console(soft_wrap=True))
     monkeypatch.setattr(
         "tinbox.cli.create_translator",
         Mock(side_effect=AssertionError("Offline matching must not call a provider")),
